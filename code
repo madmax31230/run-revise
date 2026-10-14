@@ -1,0 +1,1913 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>L'Autoroute des Révisions - Cockpit 3D</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js r128 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Fredoka:wght@400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-pink: #ff007f;
+            --neon-green: #00ff88;
+            --neon-amber: #ffbe0b;
+        }
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #090619;
+            font-family: 'Inter', sans-serif;
+            color: #ffffff;
+        }
+        .font-arcade {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .font-kid {
+            font-family: 'Fredoka', sans-serif;
+        }
+        #canvas-container {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        /* Glassmorphism HUD panels */
+        .hud-glass {
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+        }
+        .hud-question-box {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.94) 0%, rgba(30, 27, 75, 0.94) 100%);
+            border: 2px solid rgba(56, 189, 248, 0.55);
+            box-shadow: 0 0 25px rgba(56, 189, 248, 0.25), inset 0 0 15px rgba(56, 189, 248, 0.1);
+        }
+        /* Active lane highlight pill */
+        .lane-pill {
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .lane-pill.active-lane {
+            transform: translateY(-3px) scale(1.04);
+            border-color: #38bdf8;
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.6);
+            background: rgba(56, 189, 248, 0.25);
+        }
+        /* Custom scrollbars for modals */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.6);
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.9);
+        }
+        /* Flash overlay for feedback */
+        #screen-flash {
+            pointer-events: none;
+            transition: opacity 0.35s ease-out;
+        }
+        /* Steering wheel icon rotation transition */
+        #hud-wheel-svg {
+            will-change: transform;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.5); }
+            50% { box-shadow: 0 0 28px rgba(16, 185, 129, 0.9); }
+        }
+        .btn-glow {
+            animation: pulseGlow 2.2s infinite;
+        }
+    </style>
+</head>
+<body class="relative select-none">
+
+    <!-- 3D WebGL Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Screen Flash Overlay (Green on WIN, Red on FAIL, Cyan on BOOST) -->
+    <div id="screen-flash" class="fixed inset-0 z-10 opacity-0"></div>
+
+    <!-- ==================== TOP HUD: NAVIGATION, SCORE & QUESTION ==================== -->
+    <header class="fixed top-0 left-0 right-0 z-20 p-2 sm:p-4 pointer-events-none flex flex-col gap-2">
+        <!-- Top Row: Brand, Hardware Status, Subject Filters & Action Buttons -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pointer-events-auto">
+            <!-- Left: Title & Hardware Badges -->
+            <div class="flex items-center gap-2 sm:gap-3 hud-glass px-3 py-2 rounded-2xl">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-indigo-600 flex items-center justify-center shadow-lg">
+                    <i class="fa-solid fa-flag-checkered text-white text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-arcade font-bold text-xs sm:text-sm tracking-wider text-cyan-300 leading-tight">AUTOROUTE DES RÉVISIONS</h1>
+                    <div class="flex items-center gap-2 mt-0.5 text-[11px]">
+                        <span id="badge-wheel" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                            <i class="fa-solid fa-gamepad"></i> <span id="badge-wheel-text">Clavier</span>
+                        </span>
+                        <span id="badge-arduino" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                            <i class="fa-solid fa-microchip"></i> <span id="badge-arduino-text">Arduino OFF</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center: Subject Filter Pills -->
+            <div class="flex items-center gap-1 sm:gap-1.5 hud-glass p-1.5 rounded-2xl overflow-x-auto max-w-full">
+                <button onclick="setSubject('all')" id="subj-all" class="subj-btn px-2.5 py-1.5 rounded-xl text-xs font-bold transition bg-cyan-500 text-slate-950 shadow">
+                    <i class="fa-solid fa-layer-group mr-1"></i>Tout
+                </button>
+                <button onclick="setSubject('maths')" id="subj-maths" class="subj-btn px-2.5 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:bg-slate-800">
+                    <i class="fa-solid fa-calculator mr-1 text-amber-400"></i>Maths
+                </button>
+                <button onclick="setSubject('francais')" id="subj-francais" class="subj-btn px-2.5 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:bg-slate-800">
+                    <i class="fa-solid fa-book-open mr-1 text-pink-400"></i>Français
+                </button>
+                <button onclick="setSubject('culture')" id="subj-culture" class="subj-btn px-2.5 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:bg-slate-800">
+                    <i class="fa-solid fa-earth-europe mr-1 text-emerald-400"></i>Découverte
+                </button>
+                <button onclick="setSubject('perso')" id="subj-perso" class="subj-btn px-2.5 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:bg-slate-800">
+                    <i class="fa-solid fa-star mr-1 text-purple-400"></i>Devoirs Perso
+                </button>
+            </div>
+
+            <!-- Right: Config & Utility Buttons -->
+            <div class="flex items-center gap-1.5 hud-glass p-1.5 rounded-2xl">
+                <button onclick="togglePause()" id="btn-pause" title="Pause / Reprendre" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700">
+                    <i id="icon-pause" class="fa-solid fa-pause text-cyan-400"></i>
+                    <span class="hidden md:inline">Pause</span>
+                </button>
+                <button onclick="openModal('modal-wheel')" title="Configurer Volant & Pédales Logitech" class="px-2.5 py-1.5 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 text-xs font-semibold flex items-center gap-1.5 transition border border-indigo-500/40">
+                    <i class="fa-solid fa-dharmachakra text-indigo-400"></i>
+                    <span class="hidden sm:inline">Volant</span>
+                </button>
+                <button onclick="openModal('modal-arduino')" title="Connecter un Arduino en USB (Web Serial)" class="px-2.5 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 text-emerald-200 text-xs font-semibold flex items-center gap-1.5 transition border border-emerald-500/40">
+                    <i class="fa-solid fa-usb text-emerald-400"></i>
+                    <span class="hidden sm:inline">Arduino</span>
+                </button>
+                <button onclick="openModal('modal-homework')" title="Éditeur de Devoirs pour Parents" class="px-2.5 py-1.5 rounded-xl bg-amber-950/80 hover:bg-amber-900 text-amber-200 text-xs font-semibold flex items-center gap-1.5 transition border border-amber-500/40">
+                    <i class="fa-solid fa-pen-to-square text-amber-400"></i>
+                    <span class="hidden sm:inline">Devoirs</span>
+                </button>
+                <button onclick="toggleTTS()" id="btn-tts" title="Lecture vocale des questions" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-semibold flex items-center gap-1 transition border border-slate-700">
+                    <i id="icon-tts" class="fa-solid fa-volume-high"></i>
+                </button>
+                <button onclick="toggleEngineSound()" id="btn-sfx" title="Sons du moteur et effets" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-semibold flex items-center gap-1 transition border border-slate-700">
+                    <i id="icon-sfx" class="fa-solid fa-music"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Second Row: Active Question Banner & 3-Lane Preview -->
+        <div class="w-full max-w-3xl mx-auto pointer-events-auto">
+            <div class="hud-question-box rounded-2xl p-3 sm:px-6 sm:py-3.5 relative overflow-hidden">
+                <!-- Category Badge & Score Strip -->
+                <div class="flex items-center justify-between text-xs mb-1.5">
+                    <div class="flex items-center gap-2">
+                        <span id="q-category-badge" class="px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
+                            MATHS
+                        </span>
+                        <button onclick="speakCurrentQuestion()" class="text-slate-300 hover:text-white transition text-xs flex items-center gap-1 bg-slate-800/70 px-2 py-0.5 rounded-lg" title="Répéter la question à voix haute">
+                            <i class="fa-solid fa-ear-listen text-cyan-400"></i> Écouter
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-4 font-arcade">
+                        <div class="text-amber-400 font-bold text-xs sm:text-sm">
+                            <i class="fa-solid fa-bolt mr-1"></i>SÉRIE: <span id="hud-streak">0</span>
+                        </div>
+                        <div class="text-emerald-400 font-bold text-xs sm:text-sm">
+                            <i class="fa-solid fa-trophy mr-1"></i>SCORE: <span id="hud-score">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Question Text -->
+                <div id="hud-question-text" class="font-kid text-center text-lg sm:text-2xl md:text-3xl font-bold text-white tracking-wide py-1 drop-shadow">
+                    Prêt sur la ligne de départ ?
+                </div>
+
+                <!-- 3-Lane Target Alignment Preview -->
+                <div class="grid grid-cols-3 gap-2 sm:gap-3 mt-2 pt-2 border-t border-slate-700/60">
+                    <div id="lane-preview-0" class="lane-pill rounded-xl bg-slate-900/80 border border-slate-700 px-2 py-1.5 text-center flex flex-col items-center justify-center">
+                        <span class="text-[10px] uppercase tracking-wider text-rose-400 font-bold"><i class="fa-solid fa-arrow-left mr-1"></i>Voie Gauche</span>
+                        <span id="lane-ans-0" class="font-kid font-bold text-sm sm:text-lg text-white truncate max-w-full">-</span>
+                    </div>
+                    <div id="lane-preview-1" class="lane-pill active-lane rounded-xl bg-slate-900/80 border border-slate-700 px-2 py-1.5 text-center flex flex-col items-center justify-center">
+                        <span class="text-[10px] uppercase tracking-wider text-amber-400 font-bold"><i class="fa-solid fa-arrow-up mr-1"></i>Voie Centrale</span>
+                        <span id="lane-ans-1" class="font-kid font-bold text-sm sm:text-lg text-white truncate max-w-full">-</span>
+                    </div>
+                    <div id="lane-preview-2" class="lane-pill rounded-xl bg-slate-900/80 border border-slate-700 px-2 py-1.5 text-center flex flex-col items-center justify-center">
+                        <span class="text-[10px] uppercase tracking-wider text-emerald-400 font-bold">Voie Droite<i class="fa-solid fa-arrow-right ml-1"></i></span>
+                        <span id="lane-ans-2" class="font-kid font-bold text-sm sm:text-lg text-white truncate max-w-full">-</span>
+                    </div>
+                </div>
+
+                <!-- Distance Progress Bar to Portal -->
+                <div class="w-full bg-slate-800/80 h-1.5 rounded-full mt-2.5 overflow-hidden">
+                    <div id="portal-proximity-bar" class="bg-gradient-to-r from-cyan-400 via-indigo-400 to-pink-500 h-full transition-all duration-75" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Pedagogical Feedback Toast (Shown on Answer Hit) -->
+            <div id="feedback-banner" class="hidden mt-2 rounded-2xl p-3 sm:px-5 border-2 shadow-2xl transition-all transform pointer-events-auto">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div id="feedback-icon" class="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"></div>
+                        <div>
+                            <div id="feedback-title" class="font-kid font-bold text-base sm:text-lg"></div>
+                            <div id="feedback-explanation" class="text-xs sm:text-sm text-slate-200"></div>
+                        </div>
+                    </div>
+                    <span id="feedback-points" class="font-arcade font-bold text-sm sm:text-base shrink-0"></span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ==================== BOTTOM HUD: COCKPIT TELEMETRY & TOUCH CONTROLS ==================== -->
+    <footer class="fixed bottom-0 left-0 right-0 z-20 p-2 sm:p-4 pointer-events-none flex items-end justify-between gap-2">
+        <!-- Bottom Left: Live Steering Wheel & Pedals Telemetry -->
+        <div class="hud-glass rounded-2xl p-3 pointer-events-auto flex items-center gap-3 sm:gap-4">
+            <!-- Visual Steering Wheel -->
+            <div class="flex flex-col items-center">
+                <div class="relative w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center">
+                    <svg id="hud-wheel-svg" viewBox="0 0 100 100" class="w-full h-full drop-shadow">
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="#334155" stroke-width="10"/>
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="#38bdf8" stroke-width="10" stroke-dasharray="60 220" stroke-dashoffset="-75"/>
+                        <!-- Top Center Marker (Red) -->
+                        <rect x="47" y="3" width="6" height="11" rx="2" fill="#f43f5e"/>
+                        <!-- Spokes -->
+                        <path d="M12 50 L88 50 M50 50 L50 88" stroke="#94a3b8" stroke-width="8" stroke-linecap="round"/>
+                        <circle cx="50" cy="50" r="14" fill="#1e293b" stroke="#38bdf8" stroke-width="3"/>
+                    </svg>
+                </div>
+                <span id="hud-steer-val" class="font-arcade text-[10px] text-slate-300 mt-1">0°</span>
+            </div>
+
+            <!-- Pedals Bars (Brake & Gas) -->
+            <div class="flex items-end gap-2.5 h-16">
+                <!-- Brake Pedal Bar -->
+                <div class="flex flex-col items-center h-full justify-end">
+                    <div class="w-4 sm:w-5 h-12 bg-slate-800 rounded-lg overflow-hidden border border-slate-700 flex items-end p-0.5">
+                        <div id="hud-brake-bar" class="w-full bg-gradient-to-t from-rose-600 to-rose-400 rounded transition-all duration-75" style="height: 0%"></div>
+                    </div>
+                    <span class="text-[9px] font-bold text-rose-400 mt-1 uppercase">Frein</span>
+                </div>
+                <!-- Gas Pedal Bar -->
+                <div class="flex flex-col items-center h-full justify-end">
+                    <div class="w-4 sm:w-5 h-12 bg-slate-800 rounded-lg overflow-hidden border border-slate-700 flex items-end p-0.5">
+                        <div id="hud-gas-bar" class="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 rounded transition-all duration-75" style="height: 40%"></div>
+                    </div>
+                    <span class="text-[9px] font-bold text-emerald-400 mt-1 uppercase">Gaz</span>
+                </div>
+            </div>
+
+            <!-- Quick Cruise Control Toggle -->
+            <div class="hidden md:flex flex-col gap-1 border-l border-slate-700/80 pl-3 text-xs">
+                <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white">
+                    <input type="checkbox" id="hud-cruise-toggle" checked onchange="toggleCruiseMode(this.checked)" class="rounded accent-cyan-400">
+                    <span>Régulateur Auto</span>
+                </label>
+                <span class="text-[10px] text-slate-400">Avance même sans pédale</span>
+            </div>
+        </div>
+
+        <!-- Bottom Center: On-Screen Touch / Mouse Controls (Great for Tablet) -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+            <button id="touch-left" class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl hud-glass active:bg-cyan-500/40 flex items-center justify-center text-xl text-cyan-300 border border-cyan-500/30 shadow-lg">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <button id="touch-boost" onclick="triggerManualBoost()" class="px-3 h-12 sm:h-14 rounded-2xl hud-glass active:bg-amber-500/40 flex flex-col items-center justify-center text-amber-400 border border-amber-500/40 shadow-lg">
+                <i class="fa-solid fa-fire-flame-curved text-lg"></i>
+                <span class="text-[9px] font-arcade font-bold">NITRO</span>
+            </button>
+            <button id="touch-right" class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl hud-glass active:bg-cyan-500/40 flex items-center justify-center text-xl text-cyan-300 border border-cyan-500/30 shadow-lg">
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+        </div>
+
+        <!-- Bottom Right: Digital Speedometer & Nitro Gauge -->
+        <div class="hud-glass rounded-2xl p-3 px-4 pointer-events-auto flex items-center gap-4">
+            <div class="text-right">
+                <div class="flex items-baseline justify-end gap-1">
+                    <span id="hud-speed" class="font-arcade font-black text-2xl sm:text-4xl text-cyan-300 tracking-tight">95</span>
+                    <span class="font-arcade text-xs text-slate-400">KM/H</span>
+                </div>
+                <!-- RPM / Boost Bar -->
+                <div class="w-28 sm:w-36 h-2 bg-slate-800 rounded-full overflow-hidden mt-1 border border-slate-700">
+                    <div id="hud-rpm-bar" class="h-full bg-gradient-to-r from-cyan-400 via-amber-400 to-rose-500 transition-all duration-75" style="width: 55%"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-400 mt-1 font-arcade">
+                    <span id="hud-gear">RAPPORT 3</span>
+                    <span id="hud-accuracy">100% RÉUSSITE</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ==================== WELCOME / START OVERLAY MODAL ==================== -->
+    <div id="modal-welcome" class="fixed inset-0 z-40 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="hud-glass max-w-2xl w-full rounded-3xl p-6 sm:p-8 border-2 border-cyan-500/40 shadow-2xl text-center relative overflow-hidden">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-400 to-indigo-600 mx-auto flex items-center justify-center text-3xl shadow-lg mb-4">
+                <i class="fa-solid fa-car-side text-white"></i>
+            </div>
+            <h2 class="font-arcade text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-white to-pink-400">
+                L'AUTOROUTE DES RÉVISIONS
+            </h2>
+            <p class="text-slate-300 text-sm sm:text-base mt-2 max-w-xl mx-auto">
+                Pilote ton bolide sur les <strong>3 voies</strong>, vise le portail contenant la <strong>bonne réponse</strong> pour déclencher le Turbo Nitro et révise tes devoirs en t'amusant !
+            </p>
+
+            <!-- 3 Hardware Control Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 my-6 text-left">
+                <div class="bg-slate-900/90 border border-slate-700/80 rounded-2xl p-3.5">
+                    <div class="text-cyan-400 font-bold text-xs uppercase flex items-center gap-1.5 mb-1">
+                        <i class="fa-solid fa-dharmachakra"></i> Volant & Pédales USB
+                    </div>
+                    <p class="text-xs text-slate-300">Branche ton volant Logitech en USB et tourne-le pour qu'il soit détecté automatiquement.</p>
+                </div>
+                <div class="bg-slate-900/90 border border-slate-700/80 rounded-2xl p-3.5">
+                    <div class="text-emerald-400 font-bold text-xs uppercase flex items-center gap-1.5 mb-1">
+                        <i class="fa-solid fa-microchip"></i> Pont Arduino USB
+                    </div>
+                    <p class="text-xs text-slate-300">Pilote des LEDs/gyrophares sur bonne réponse ou lis un pédalier branché sur A0/A1.</p>
+                </div>
+                <div class="bg-slate-900/90 border border-slate-700/80 rounded-2xl p-3.5">
+                    <div class="text-amber-400 font-bold text-xs uppercase flex items-center gap-1.5 mb-1">
+                        <i class="fa-solid fa-keyboard"></i> Clavier & Tablette
+                    </div>
+                    <p class="text-xs text-slate-300">Flèches Gauche/Droite (ou Q/D) pour diriger, Haut/Bas (Z/S) pour gérer les gaz.</p>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-center gap-3">
+                <button onclick="startGame()" class="btn-glow px-8 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-500 text-slate-950 font-arcade font-bold text-base sm:text-lg shadow-xl hover:scale-105 transition cursor-pointer">
+                    <i class="fa-solid fa-play mr-2"></i> DÉMARRER LE MOTEUR
+                </button>
+                <button onclick="openModal('modal-wheel')" class="px-5 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-indigo-300 font-semibold text-sm border border-indigo-500/40 transition">
+                    <i class="fa-solid fa-Sliders mr-1.5"></i> Calibrer mon Volant
+                </button>
+                <button onclick="openModal('modal-homework')" class="px-5 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-semibold text-sm border border-amber-500/40 transition">
+                    <i class="fa-solid fa-pen-to-square mr-1.5"></i> Gérer les Devoirs
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL 1: LOGITECH WHEEL & PEDALS CALIBRATION ==================== -->
+    <div id="modal-wheel" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+        <div class="hud-glass max-w-3xl w-full max-h-[90vh] overflow-y-auto rounded-3xl p-5 sm:p-6 border border-indigo-500/40 shadow-2xl">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-700">
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-dharmachakra text-2xl text-indigo-400"></i>
+                    <div>
+                        <h3 class="font-arcade font-bold text-lg text-white">CALIBRATION VOLANT & PÉDALES USB</h3>
+                        <p class="text-xs text-slate-400">Compatible Logitech G25, G27, G29, G920, Driving Force, Momo & Manettes</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('modal-wheel')" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Connected Gamepad Banner -->
+            <div id="gamepad-status-box" class="my-4 p-3.5 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div id="gamepad-dot" class="w-3.5 h-3.5 rounded-full bg-amber-400 animate-pulse"></div>
+                    <div>
+                        <div id="gamepad-name" class="text-sm font-bold text-slate-200">Aucun volant détecté — Appuie sur un bouton ou tourne le volant !</div>
+                        <div class="text-xs text-slate-400">Par sécurité, le navigateur attend que tu bouges le volant une première fois.</div>
+                    </div>
+                </div>
+                <button onclick="resetWheelDefaults()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-cyan-300 border border-slate-600 shrink-0">
+                    Réinitialiser
+                </button>
+            </div>
+
+            <!-- Live Raw Axes Telemetry -->
+            <div class="mb-5">
+                <div class="text-xs font-bold uppercase tracking-wider text-indigo-300 mb-2 flex items-center justify-between">
+                    <span><i class="fa-solid fa-wave-square mr-1.5"></i> Télémétrie brute des axes en temps réel</span>
+                    <span class="text-[11px] text-slate-400 font-normal">Bouge ton volant et tes pédales pour repérer quel numéro d'axe bouge</span>
+                </div>
+                <div id="raw-axes-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <!-- Populated dynamically at 60fps -->
+                    <div class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-center text-xs text-slate-500 col-span-4">
+                        En attente d'un mouvement sur le volant ou la manette USB...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Axis Assignment & Inversion Settings -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                <!-- Steering Config -->
+                <div class="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-700/80">
+                    <div class="font-bold text-sm text-cyan-300 mb-2"><i class="fa-solid fa-arrows-left-right mr-1.5"></i> 1. Axe Volant (Direction)</div>
+                    <label class="block text-xs text-slate-400 mb-1">Numéro de l'axe :</label>
+                    <select id="cfg-steer-axis" onchange="updateWheelConfig()" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white mb-2">
+                        <option value="0" selected>Axe 0 (Standard Volant)</option>
+                        <option value="1">Axe 1</option>
+                        <option value="2">Axe 2</option>
+                        <option value="3">Axe 3</option>
+                    </select>
+                    <label class="block text-xs text-slate-400 mb-1">Sensibilité du volant : <span id="lbl-sens" class="text-cyan-300 font-bold">1.8x</span></label>
+                    <input type="range" id="cfg-steer-sens" min="0.8" max="4.0" step="0.1" value="1.8" oninput="updateWheelConfig()" class="w-full accent-cyan-400">
+                    <span class="text-[10px] text-slate-400 block mt-1">Augmente si ton volant tourne à 900° pour braquer sans effort.</span>
+                </div>
+
+                <!-- Gas Pedal Config -->
+                <div class="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-700/80">
+                    <div class="font-bold text-sm text-emerald-400 mb-2"><i class="fa-solid fa-gauge-high mr-1.5"></i> 2. Pédale Accélérateur</div>
+                    <label class="block text-xs text-slate-400 mb-1">Numéro de l'axe :</label>
+                    <select id="cfg-gas-axis" onchange="updateWheelConfig()" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white mb-2">
+                        <option value="-1">Désactivé (Clavier / Auto)</option>
+                        <option value="1">Axe 1 (Combiné / Stick)</option>
+                        <option value="2" selected>Axe 2 (Logitech G29/G27 Gaz)</option>
+                        <option value="3">Axe 3</option>
+                        <option value="4">Axe 4</option>
+                        <option value="5">Axe 5</option>
+                    </select>
+                    <label class="flex items-center gap-2 text-xs text-slate-200 cursor-pointer mt-2">
+                        <input type="checkbox" id="cfg-gas-invert" checked onchange="updateWheelConfig()" class="rounded accent-emerald-400">
+                        <span>Inverser l'axe (+1 relâché → -1 appuyé)</span>
+                    </label>
+                    <span class="text-[10px] text-slate-400 block mt-1">Sur les pédaliers Logitech, relâché vaut souvent +1.0.</span>
+                </div>
+
+                <!-- Brake Pedal Config -->
+                <div class="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-700/80">
+                    <div class="font-bold text-sm text-rose-400 mb-2"><i class="fa-solid fa-hand-paper mr-1.5"></i> 3. Pédale de Frein</div>
+                    <label class="block text-xs text-slate-400 mb-1">Numéro de l'axe :</label>
+                    <select id="cfg-brake-axis" onchange="updateWheelConfig()" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white mb-2">
+                        <option value="-1">Désactivé</option>
+                        <option value="1">Axe 1</option>
+                        <option value="2">Axe 2</option>
+                        <option value="3">Axe 3</option>
+                        <option value="4">Axe 4</option>
+                        <option value="5" selected>Axe 5 (Logitech G29/G27 Frein)</option>
+                    </select>
+                    <label class="flex items-center gap-2 text-xs text-slate-200 cursor-pointer mt-2">
+                        <input type="checkbox" id="cfg-brake-invert" checked onchange="updateWheelConfig()" class="rounded accent-rose-400">
+                        <span>Inverser l'axe (+1 relâché → -1 appuyé)</span>
+                    </label>
+                    <span class="text-[10px] text-slate-400 block mt-1">Permet de ralentir devant une question difficile !</span>
+                </div>
+            </div>
+
+            <div class="flex justify-end">
+                <button onclick="closeModal('modal-wheel')" class="px-6 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-bold text-sm transition">
+                    Enregistrer & Retourner à la piste
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL 2: ARDUINO WEB SERIAL BRIDGE ==================== -->
+    <div id="modal-arduino" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+        <div class="hud-glass max-w-3xl w-full max-h-[90vh] overflow-y-auto rounded-3xl p-5 sm:p-6 border border-emerald-500/40 shadow-2xl">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-700">
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-microchip text-2xl text-emerald-400"></i>
+                    <div>
+                        <h3 class="font-arcade font-bold text-lg text-white">PONT ARDUINO USB (WEB SERIAL API)</h3>
+                        <p class="text-xs text-slate-400">Connecte ton Arduino directement au navigateur (Chrome / Edge sur PC) sans serveur</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('modal-arduino')" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Connection Controls -->
+            <div class="my-4 p-4 rounded-2xl bg-slate-900 border border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <select id="serial-baud" class="bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white">
+                        <option value="9600" selected>9600 bauds</option>
+                        <option value="115200">115200 bauds</option>
+                    </select>
+                    <button onclick="connectArduinoSerial()" id="btn-connect-serial" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition flex items-center gap-2">
+                        <i class="fa-solid fa-plug"></i> Choisir le port COM Arduino
+                    </button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="sendArduinoCommand('WIN\n')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-emerald-900/60 text-emerald-300 text-xs border border-emerald-500/30">
+                        Tester WIN
+                    </button>
+                    <button onclick="sendArduinoCommand('FAIL\n')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-900/60 text-rose-300 text-xs border border-rose-500/30">
+                        Tester FAIL
+                    </button>
+                    <button onclick="sendArduinoCommand('BOOST\n')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-900/60 text-cyan-300 text-xs border border-cyan-500/30">
+                        Tester BOOST
+                    </button>
+                </div>
+            </div>
+
+            <!-- Serial Monitor & Explanations -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <div class="text-xs font-bold uppercase text-emerald-400 mb-1.5">Console Série (Entrées / Sorties)</div>
+                    <div id="serial-log" class="h-44 rounded-xl bg-slate-950 border border-slate-800 p-3 font-mono text-xs text-emerald-300 overflow-y-auto space-y-1">
+                        <div class="text-slate-500">// En attente de connexion USB...</div>
+                        <div class="text-slate-400">// Le jeu envoie : WIN, FAIL, BOOST, SPD:120</div>
+                        <div class="text-slate-400">// Le jeu lit (optionnel) : S:512,G:800,B:0</div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-xs font-bold uppercase text-cyan-400">Code Arduino C++ prêt à téléverser</span>
+                        <button onclick="copyArduinoSketch()" id="btn-copy-sketch" class="text-xs px-2.5 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-600">
+                            <i class="fa-regular fa-copy mr-1"></i>Copier le code
+                        </button>
+                    </div>
+                    <pre id="arduino-sketch-code" class="h-44 rounded-xl bg-slate-950 border border-slate-800 p-3 font-mono text-[11px] text-slate-300 overflow-y-auto select-all">// Code Arduino : LEDs/Buzzer + Lecture Pédalier analogique
+const int PIN_WIN_LED = 13; // LED Verte ou Gyrophare
+const int PIN_BUZZER  = 8;  // Buzzer passif/actif
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(PIN_WIN_LED, OUTPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
+}
+
+void loop() {
+  // 1. Réception des événements du jeu 3D
+  if (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd == "WIN" || cmd == "BOOST") {
+      digitalWrite(PIN_WIN_LED, HIGH);
+      tone(PIN_BUZZER, 1200, 150);
+      delay(150);
+      tone(PIN_BUZZER, 1600, 250);
+    } else if (cmd == "FAIL") {
+      digitalWrite(PIN_WIN_LED, LOW);
+      tone(PIN_BUZZER, 220, 400);
+    }
+  }
+  // 2. Optionnel : Si pédalier branché sur A0 (Volant), A1 (Gaz), A2 (Frein)
+  // Décommente la ligne suivante :
+  // Serial.print("S:"); Serial.print(analogRead(A0));
+  // Serial.print(",G:"); Serial.print(analogRead(A1));
+  // Serial.print(",B:"); Serial.println(analogRead(A2));
+  delay(30);
+}</pre>
+                </div>
+            </div>
+
+            <div class="flex justify-end">
+                <button onclick="closeModal('modal-arduino')" class="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL 3: HOMEWORK EDITOR ("ÉDITEUR DE DEVOIRS") ==================== -->
+    <div id="modal-homework" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+        <div class="hud-glass max-w-3xl w-full max-h-[90vh] overflow-y-auto rounded-3xl p-5 sm:p-6 border border-amber-500/40 shadow-2xl">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-700">
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-pen-to-square text-2xl text-amber-400"></i>
+                    <div>
+                        <h3 class="font-arcade font-bold text-lg text-white">ÉDITEUR DE DEVOIRS SUR MESURE</h3>
+                        <p class="text-xs text-slate-400">Ajoute les mots de dictée, tables ou leçons de la semaine (sauvegardé sur l'appareil)</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('modal-homework')" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Add Question Form -->
+            <div class="my-4 p-4 rounded-2xl bg-slate-900/90 border border-slate-700 space-y-3">
+                <div class="text-xs font-bold uppercase text-amber-400">Ajouter une nouvelle question dans "Devoirs Perso"</div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs text-slate-400 mb-1">Question affichée en haut :</label>
+                        <input id="hw-q" type="text" placeholder="Ex: Conjugue : Demain, nous (aller) ___ au parc." class="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-emerald-400 font-bold mb-1">Bonne réponse (Portail Vert) :</label>
+                        <input id="hw-good" type="text" placeholder="Ex: irons" class="w-full bg-slate-800 border border-emerald-500/60 rounded-xl px-3 py-2 text-sm text-white">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                        <label class="block text-xs text-rose-400 mb-1">Mauvaise réponse 1 (Piège) :</label>
+                        <input id="hw-bad1" type="text" placeholder="Ex: allons" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-rose-400 mb-1">Mauvaise réponse 2 (Piège) :</label>
+                        <input id="hw-bad2" type="text" placeholder="Ex: iront" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-cyan-300 mb-1">Règle / Explication en cas d'erreur :</label>
+                        <input id="hw-exp" type="text" placeholder="Ex: Futur avec 'nous' se termine par -ons !" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white">
+                    </div>
+                </div>
+                <div class="flex justify-between items-center pt-1">
+                    <span id="hw-status-msg" class="text-xs text-emerald-400"></span>
+                    <button onclick="addCustomQuestion()" class="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs sm:text-sm transition">
+                        <i class="fa-solid fa-plus mr-1"></i> Ajouter aux Devoirs Perso
+                    </button>
+                </div>
+            </div>
+
+            <!-- List of Custom Questions -->
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold uppercase text-slate-300">Questions personnalisées enregistrées (<span id="hw-count">0</span>)</span>
+                    <button onclick="setSubject('perso'); closeModal('modal-homework');" class="text-xs text-purple-300 hover:underline">
+                        <i class="fa-solid fa-play mr-1"></i>Jouer uniquement avec mes Devoirs Perso
+                    </button>
+                </div>
+                <div id="hw-list" class="max-h-52 overflow-y-auto space-y-2 pr-1"></div>
+            </div>
+
+            <div class="flex justify-end">
+                <button onclick="closeModal('modal-homework')" class="px-6 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-sm transition">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MAIN APPLICATION SCRIPT ==================== -->
+    <script>
+        /***********************************************************************
+         * 1. BANQUE DE QUESTIONS PÉDAGOGIQUES (MATHS, FRANÇAIS, DÉCOUVERTE, PERSO)
+         ***********************************************************************/
+        const DEFAULT_QUESTIONS = [
+            // --- MATHS ---
+            { category: 'maths', label: 'Maths • Multiplication', q: '7 × 8 = ?', good: '56', bad: ['54', '64'], exp: '7 × 8 = 56 ! Astuce : 5 - 6 - 7 - 8 (56 = 7 × 8).' },
+            { category: 'maths', label: 'Maths • Multiplication', q: '6 × 9 = ?', good: '54', bad: ['56', '63'], exp: '6 × 9 = 54 (car 6 × 10 = 60, moins 6 = 54).' },
+            { category: 'maths', label: 'Maths • Multiplication', q: '8 × 8 = ?', good: '64', bad: ['62', '72'], exp: '8 × 8 = 64 !' },
+            { category: 'maths', label: 'Maths • Multiplication', q: '9 × 7 = ?', good: '63', bad: ['56', '72'], exp: '9 × 7 = 63 !' },
+            { category: 'maths', label: 'Maths • Calcul Mental', q: 'Complément à 100 : 35 + ? = 100', good: '65', bad: ['75', '55'], exp: '35 + 65 = 100 (30 + 60 = 90, et 5 + 5 = 10).' },
+            { category: 'maths', label: 'Maths • Calcul Mental', q: 'Quel est le double de 38 ?', good: '76', bad: ['66', '78'], exp: 'Le double de 30 est 60, le double de 8 est 16 : 60 + 16 = 76.' },
+            { category: 'maths', label: 'Maths • Calcul Mental', q: 'Quelle est la moitié de 90 ?', good: '45', bad: ['40', '55'], exp: 'La moitié de 80 est 40, la moitié de 10 est 5 : 40 + 5 = 45.' },
+            { category: 'maths', label: 'Maths • Calcul Mental', q: '125 + 50 = ?', good: '175', bad: ['165', '185'], exp: '125 + 50 = 175.' },
+            { category: 'maths', label: 'Maths • Division', q: 'Combien de fois 6 dans 42 ?', good: '7', bad: ['6', '8'], exp: '6 × 7 = 42, donc il y a 7 fois 6 dans 42.' },
+
+            // --- FRANÇAIS ---
+            { category: 'francais', label: 'Français • Homophones', q: 'Il ___ mangé toute sa soupe.', good: 'a', bad: ['à', 'as'], exp: 'On écrit "a" sans accent car on peut dire "Il avait mangé" (verbe avoir).' },
+            { category: 'francais', label: 'Français • Homophones', q: 'Les pilotes ___ prêts sur la grille !', good: 'sont', bad: ['son', 'sons'], exp: 'On écrit "sont" (verbe être) car on peut dire "Les pilotes étaient prêts".' },
+            { category: 'francais', label: 'Français • Homophones', q: 'Où vas-tu ? À la mer ___ à la montagne ?', good: 'ou', bad: ['où', 'houx'], exp: 'On écrit "ou" sans accent quand on peut le remplacer par "ou bien".' },
+            { category: 'francais', label: 'Français • Conjugaison', q: 'Présent : Les enfants ___ dans le jardin.', good: 'jouent', bad: ['joue', 'joues'], exp: 'Avec "Les enfants" (ils au pluriel), le verbe prend "-ent" !' },
+            { category: 'francais', label: 'Français • Conjugaison', q: 'Imparfait : Autrefois, nous ___ en calèche.', good: 'voyagions', bad: ['voyageons', 'voyagiez'], exp: 'À l\'imparfait avec "nous", la terminaison est "-ions" (voyagions).' },
+            { category: 'francais', label: 'Français • Conjugaison', q: 'Futur : Demain, tu ___ la course !', good: 'gagneras', bad: ['gagnera', 'gagnes'], exp: 'Au futur avec "tu", il ne faut jamais oublier le "s" final : gagneras !' },
+            { category: 'francais', label: 'Français • Orthographe', q: 'Quel est le pluriel de "un cheval" ?', good: 'des chevaux', bad: ['des chevals', 'des chevaus'], exp: 'Les noms en -al font leur pluriel en "-aux" (des chevaux, des journaux).' },
+            { category: 'francais', label: 'Français • Orthographe', q: 'Pluriel : Des hiboux, des genoux, des ___', good: 'cailloux', bad: ['caillous', 'caillouxes'], exp: 'Bijou, caillou, chou, genou, hibou, joujou, pou prennent un X au pluriel !' },
+
+            // --- DÉCOUVERTE (ANGLAIS, SCIENCES, GÉO) ---
+            { category: 'culture', label: 'Anglais • Vocabulaire', q: 'Comment dit-on "Volant / Voiture rouge" : Red ___ ?', good: 'car', bad: ['cat', 'dog'], exp: '"Red car" signifie voiture rouge en anglais !' },
+            { category: 'culture', label: 'Anglais • Vocabulaire', q: 'Que signifie "The sun is yellow" ?', good: 'Le soleil est jaune', bad: ['La lune est bleue', 'Le ciel est gris'], exp: 'Sun = Soleil, Yellow = Jaune.' },
+            { category: 'culture', label: 'Sciences • Espace', q: 'Quelle est la "Planète Rouge" du système solaire ?', good: 'Mars', bad: ['Vénus', 'Jupiter'], exp: 'Mars est surnommée la Planète Rouge à cause de l\'oxyde de fer à sa surface.' },
+            { category: 'culture', label: 'Géographie • France', q: 'Quel fleuve traverse la ville de Paris ?', good: 'La Seine', bad: ['La Loire', 'Le Rhône'], exp: 'C\'est la Seine qui traverse Paris !' }
+        ];
+
+        const DEFAULT_CUSTOM_QUESTIONS = [
+            { category: 'perso', label: 'Devoirs Perso', q: '9 × 6 = ?', good: '54', bad: ['56', '48'], exp: '9 × 6 = 54 !' },
+            { category: 'perso', label: 'Devoirs Perso', q: 'Elle range ___ affaires dans le sac.', good: 'ses', bad: ['ces', 's\'est'], exp: 'On écrit "ses" (possessif : les siennes).' }
+        ];
+
+        let customQuestions = [];
+        let currentSubject = 'all';
+        let activeQuestion = null;
+
+        function loadCustomQuestions() {
+            try {
+                const saved = localStorage.getItem('autoroute_devoirs_perso');
+                if (saved) {
+                    customQuestions = JSON.parse(saved);
+                } else {
+                    customQuestions = [...DEFAULT_CUSTOM_QUESTIONS];
+                    saveCustomQuestions();
+                }
+            } catch (e) {
+                customQuestions = [...DEFAULT_CUSTOM_QUESTIONS];
+            }
+            renderCustomQuestionsList();
+        }
+
+        function saveCustomQuestions() {
+            try {
+                localStorage.setItem('autoroute_devoirs_perso', JSON.stringify(customQuestions));
+            } catch (e) {}
+            renderCustomQuestionsList();
+        }
+
+        function renderCustomQuestionsList() {
+            const listEl = document.getElementById('hw-list');
+            const countEl = document.getElementById('hw-count');
+            if (!listEl) return;
+            countEl.textContent = customQuestions.length;
+
+            if (customQuestions.length === 0) {
+                listEl.innerHTML = `<div class="p-3 rounded-xl bg-slate-900 text-xs text-slate-400 text-center">Aucune question personnalisée. Ajoutes-en une ci-dessus !</div>`;
+                return;
+            }
+
+            listEl.innerHTML = customQuestions.map((item, idx) => `
+                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-700/80 flex items-center justify-between gap-2 text-xs">
+                    <div>
+                        <div class="font-bold text-white">${escapeHtml(item.q)}</div>
+                        <div class="text-slate-400 mt-0.5">
+                            <span class="text-emerald-400 font-semibold">✔ ${escapeHtml(item.good)}</span> •
+                            <span class="text-rose-400">✘ ${escapeHtml(item.bad[0])} / ${escapeHtml(item.bad[1])}</span>
+                        </div>
+                    </div>
+                    <button onclick="deleteCustomQuestion(${idx})" class="w-8 h-8 rounded-lg bg-rose-950/80 hover:bg-rose-800 text-rose-300 flex items-center justify-center shrink-0" title="Supprimer">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function addCustomQuestion() {
+            const q = document.getElementById('hw-q').value.trim();
+            const good = document.getElementById('hw-good').value.trim();
+            const bad1 = document.getElementById('hw-bad1').value.trim();
+            const bad2 = document.getElementById('hw-bad2').value.trim();
+            const exp = document.getElementById('hw-exp').value.trim() || `La bonne réponse était : ${good}`;
+            const statusMsg = document.getElementById('hw-status-msg');
+
+            if (!q || !good || !bad1 || !bad2) {
+                statusMsg.textContent = "⚠️ Remplis la question, la bonne réponse et les 2 pièges.";
+                statusMsg.className = "text-xs text-rose-400";
+                return;
+            }
+
+            customQuestions.unshift({
+                category: 'perso',
+                label: 'Devoirs Perso',
+                q,
+                good,
+                bad: [bad1, bad2],
+                exp
+            });
+            saveCustomQuestions();
+
+            document.getElementById('hw-q').value = '';
+            document.getElementById('hw-good').value = '';
+            document.getElementById('hw-bad1').value = '';
+            document.getElementById('hw-bad2').value = '';
+            document.getElementById('hw-exp').value = '';
+
+            statusMsg.textContent = "✔ Question ajoutée avec succès !";
+            statusMsg.className = "text-xs text-emerald-400";
+        }
+
+        function deleteCustomQuestion(idx) {
+            customQuestions.splice(idx, 1);
+            saveCustomQuestions();
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
+        }
+
+        /***********************************************************************
+         * 2. SYNTHÈSE VOCALE (TTS) & SYNTHÉTISEUR AUDIO MOTEUR (WEB AUDIO API)
+         ***********************************************************************/
+        let ttsEnabled = true;
+        let sfxEnabled = true;
+        let audioCtx = null;
+        let engineOsc = null;
+        let engineGain = null;
+
+        function initAudioEngine() {
+            if (audioCtx) return;
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+
+                // Continuous subtle low-frequency engine rumble
+                engineOsc = audioCtx.createOscillator();
+                const filter = audioCtx.createBiquadFilter();
+                engineGain = audioCtx.createGain();
+
+                engineOsc.type = 'sawtooth';
+                engineOsc.frequency.value = 55;
+
+                filter.type = 'lowpass';
+                filter.frequency.value = 180;
+
+                engineGain.gain.value = sfxEnabled ? 0.045 : 0;
+
+                engineOsc.connect(filter);
+                filter.connect(engineGain);
+                engineGain.connect(audioCtx.destination);
+                engineOsc.start();
+            } catch (e) {
+                console.warn("Web Audio non initialisé:", e);
+            }
+        }
+
+        function updateEngineSound(speedKmh, isBoosting) {
+            if (!audioCtx || !engineOsc || !engineGain) return;
+            if (!sfxEnabled || gameState.paused) {
+                engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+                return;
+            }
+            const baseFreq = 42 + (speedKmh * 0.48) + (isBoosting ? 25 : 0);
+            engineOsc.frequency.setTargetAtTime(baseFreq, audioCtx.currentTime, 0.08);
+            engineGain.gain.setTargetAtTime(isBoosting ? 0.075 : 0.04, audioCtx.currentTime, 0.1);
+        }
+
+        function playSoundEffect(type) {
+            if (!sfxEnabled) return;
+            initAudioEngine();
+            if (!audioCtx) return;
+
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'win') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, now);       // C5
+                osc.frequency.setValueAtTime(659.25, now + 0.09); // E5
+                osc.frequency.setValueAtTime(783.99, now + 0.18); // G5
+                osc.frequency.setValueAtTime(1046.50, now + 0.28);// C6
+                gain.gain.setValueAtTime(0.18, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+                osc.start(now);
+                osc.stop(now + 0.55);
+            } else if (type === 'fail') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.linearRampToValueAtTime(130, now + 0.35);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+                osc.start(now);
+                osc.stop(now + 0.4);
+            } else if (type === 'boost') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.exponentialRampToValueAtTime(620, now + 0.35);
+                gain.gain.setValueAtTime(0.14, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+                osc.start(now);
+                osc.stop(now + 0.38);
+            }
+        }
+
+        function speakText(text) {
+            if (!ttsEnabled || !('speechSynthesis' in window)) return;
+            try {
+                window.speechSynthesis.cancel();
+                const cleanText = text.replace(/___/g, ' , trou , ').replace(/×/g, ' fois ');
+                const utter = new SpeechSynthesisUtterance(cleanText);
+                utter.lang = 'fr-FR';
+                utter.rate = 1.02;
+                window.speechSynthesis.speak(utter);
+            } catch (e) {}
+        }
+
+        function speakCurrentQuestion() {
+            if (activeQuestion) {
+                const previous = ttsEnabled;
+                ttsEnabled = true;
+                speakText(activeQuestion.q);
+                ttsEnabled = previous;
+            }
+        }
+
+        function toggleTTS() {
+            ttsEnabled = !ttsEnabled;
+            const icon = document.getElementById('icon-tts');
+            icon.className = ttsEnabled ? 'fa-solid fa-volume-high text-cyan-300' : 'fa-solid fa-volume-xmark text-slate-500';
+            if (ttsEnabled && activeQuestion) speakText(activeQuestion.q);
+        }
+
+        function toggleEngineSound() {
+            sfxEnabled = !sfxEnabled;
+            const icon = document.getElementById('icon-sfx');
+            icon.className = sfxEnabled ? 'fa-solid fa-music text-cyan-300' : 'fa-solid fa-bell-slash text-slate-500';
+        }
+
+        /***********************************************************************
+         * 3. SYSTÈME D'ENTRÉES HYBRIDE : CLAVIER + VOLANT USB (GAMEPAD) + ARDUINO
+         ***********************************************************************/
+        const inputState = {
+            // Keyboard
+            left: false,
+            right: false,
+            up: false,
+            down: false,
+            // Final normalized controls: steer in [-1, 1], gas in [0, 1], brake in [0, 1]
+            steer: 0,
+            gas: 0.45,
+            brake: 0,
+            // Config for USB Wheel
+            wheelConnected: false,
+            steerAxis: 0,
+            steerSensitivity: 1.8,
+            gasAxis: 2,
+            gasInvert: true,
+            brakeAxis: 5,
+            brakeInvert: true,
+            cruiseControl: true, // Keeps a comfortable base speed for kids even if gas isn't pressed
+            // Arduino Serial values (optional analog inputs)
+            arduinoConnected: false,
+            arduinoHasAnalog: false,
+            arduinoSteer: 0,
+            arduinoGas: 0,
+            arduinoBrake: 0
+        };
+
+        // Keyboard Listeners
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'KeyQ') inputState.left = true;
+            if (e.code === 'ArrowRight' || e.code === 'KeyD') inputState.right = true;
+            if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') inputState.up = true;
+            if (e.code === 'ArrowDown' || e.code === 'KeyS') inputState.down = true;
+            if (e.code === 'Space') triggerManualBoost();
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'KeyQ') inputState.left = false;
+            if (e.code === 'ArrowRight' || e.code === 'KeyD') inputState.right = false;
+            if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') inputState.up = false;
+            if (e.code === 'ArrowDown' || e.code === 'KeyS') inputState.down = false;
+        });
+
+        // Touch / Mouse Hold Listeners for Tablet
+        function bindHoldButton(id, keyProp) {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            const start = (e) => { e.preventDefault(); inputState[keyProp] = true; };
+            const end = (e) => { e.preventDefault(); inputState[keyProp] = false; };
+            btn.addEventListener('mousedown', start);
+            btn.addEventListener('mouseup', end);
+            btn.addEventListener('mouseleave', end);
+            btn.addEventListener('touchstart', start, { passive: false });
+            btn.addEventListener('touchend', end, { passive: false });
+        }
+        bindHoldButton('touch-left', 'left');
+        bindHoldButton('touch-right', 'right');
+
+        // Gamepad API Events
+        window.addEventListener('gamepadconnected', (e) => {
+            updateGamepadBadge(e.gamepad);
+        });
+        window.addEventListener('gamepaddisconnected', () => {
+            inputState.wheelConnected = false;
+            const badge = document.getElementById('badge-wheel');
+            const badgeTxt = document.getElementById('badge-wheel-text');
+            badge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700";
+            badgeTxt.textContent = "Clavier";
+        });
+
+        function updateGamepadBadge(gp) {
+            if (!gp) return;
+            inputState.wheelConnected = true;
+            const badge = document.getElementById('badge-wheel');
+            const badgeTxt = document.getElementById('badge-wheel-text');
+            badge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-500/50";
+            const shortName = gp.id.length > 18 ? gp.id.substring(0, 18) + '…' : gp.id;
+            badgeTxt.textContent = shortName;
+
+            const nameEl = document.getElementById('gamepad-name');
+            const dotEl = document.getElementById('gamepad-dot');
+            if (nameEl) nameEl.textContent = `Connecté : ${gp.id}`;
+            if (dotEl) dotEl.className = "w-3.5 h-3.5 rounded-full bg-emerald-400";
+        }
+
+        function updateWheelConfig() {
+            inputState.steerAxis = parseInt(document.getElementById('cfg-steer-axis').value, 10);
+            inputState.steerSensitivity = parseFloat(document.getElementById('cfg-steer-sens').value);
+            document.getElementById('lbl-sens').textContent = inputState.steerSensitivity.toFixed(1) + 'x';
+            inputState.gasAxis = parseInt(document.getElementById('cfg-gas-axis').value, 10);
+            inputState.gasInvert = document.getElementById('cfg-gas-invert').checked;
+            inputState.brakeAxis = parseInt(document.getElementById('cfg-brake-axis').value, 10);
+            inputState.brakeInvert = document.getElementById('cfg-brake-invert').checked;
+        }
+
+        function resetWheelDefaults() {
+            document.getElementById('cfg-steer-axis').value = "0";
+            document.getElementById('cfg-steer-sens').value = "1.8";
+            document.getElementById('cfg-gas-axis').value = "2";
+            document.getElementById('cfg-gas-invert').checked = true;
+            document.getElementById('cfg-brake-axis').value = "5";
+            document.getElementById('cfg-brake-invert').checked = true;
+            updateWheelConfig();
+        }
+
+        function toggleCruiseMode(enabled) {
+            inputState.cruiseControl = enabled;
+        }
+
+        // Normalize a pedal axis from [-1..1] to [0..1]
+        function readPedalValue(rawVal, invert) {
+            if (typeof rawVal !== 'number' || isNaN(rawVal)) return 0;
+            // If resting value is near 0 (e.g. gamepad trigger), map [0..1]
+            // Standard Logitech wheel pedals go from +1 (released) to -1 (pressed)
+            let v = invert ? (1 - rawVal) * 0.5 : (rawVal + 1) * 0.5;
+            return Math.max(0, Math.min(1, v));
+        }
+
+        function pollInputs(dt) {
+            let gp = null;
+            if (navigator.getGamepads) {
+                const pads = navigator.getGamepads();
+                for (let i = 0; i < pads.length; i++) {
+                    if (pads[i] && pads[i].connected) {
+                        gp = pads[i];
+                        break;
+                    }
+                }
+            }
+
+            if (gp) {
+                if (!inputState.wheelConnected) updateGamepadBadge(gp);
+
+                // Update live telemetry if calibration modal is open
+                const modalWheel = document.getElementById('modal-wheel');
+                if (modalWheel && !modalWheel.classList.contains('hidden')) {
+                    renderRawAxesTelemetry(gp);
+                }
+
+                // 1. Steering from USB Wheel
+                const rawSteer = gp.axes[inputState.steerAxis] || 0;
+                const deadzone = 0.03;
+                let cleanSteer = Math.abs(rawSteer) < deadzone ? 0 : rawSteer;
+                let scaledSteer = Math.max(-1, Math.min(1, cleanSteer * inputState.steerSensitivity));
+
+                // Combine with keyboard if pressed
+                if (inputState.left) scaledSteer = -1;
+                if (inputState.right) scaledSteer = 1;
+                inputState.steer += (scaledSteer - inputState.steer) * Math.min(1, dt * 14);
+
+                // 2. Gas Pedal
+                let gasVal = 0;
+                if (inputState.gasAxis >= 0 && gp.axes.length > inputState.gasAxis) {
+                    gasVal = readPedalValue(gp.axes[inputState.gasAxis], inputState.gasInvert);
+                }
+                if (inputState.up) gasVal = 1;
+                if (inputState.cruiseControl) {
+                    gasVal = Math.max(0.42, gasVal);
+                }
+                inputState.gas = gasVal;
+
+                // 3. Brake Pedal
+                let brakeVal = 0;
+                if (inputState.brakeAxis >= 0 && gp.axes.length > inputState.brakeAxis) {
+                    brakeVal = readPedalValue(gp.axes[inputState.brakeAxis], inputState.brakeInvert);
+                }
+                if (inputState.down) brakeVal = 1;
+                inputState.brake = brakeVal;
+
+                // Any wheel paddle/button 0 or 1 triggers nitro if available
+                if (gp.buttons[0] && gp.buttons[0].pressed) {
+                    triggerManualBoost();
+                }
+            } else if (inputState.arduinoHasAnalog) {
+                // Driven by Arduino Analog Potentiometers (S:0-1023, G:0-1023, B:0-1023)
+                inputState.steer += (inputState.arduinoSteer - inputState.steer) * Math.min(1, dt * 12);
+                inputState.gas = inputState.cruiseControl ? Math.max(0.42, inputState.arduinoGas) : inputState.arduinoGas;
+                inputState.brake = inputState.arduinoBrake;
+            } else {
+                // Pure Keyboard / Touch smooth steering
+                let targetSteer = 0;
+                if (inputState.left) targetSteer -= 1;
+                if (inputState.right) targetSteer += 1;
+
+                if (targetSteer !== 0) {
+                    inputState.steer += targetSteer * dt * 2.6;
+                    inputState.steer = Math.max(-1, Math.min(1, inputState.steer));
+                } else {
+                    // Gently spring back toward the nearest of the 3 lanes (-1, 0, +1) so keyboard/tablet play is super comfortable!
+                    const nearestLaneSteer = Math.round(inputState.steer * 1.35) * 0.72;
+                    const clampedSnap = Math.max(-0.72, Math.min(0.72, nearestLaneSteer));
+                    inputState.steer += (clampedSnap - inputState.steer) * Math.min(1, dt * 6);
+                }
+
+                inputState.gas = inputState.up ? 1.0 : (inputState.cruiseControl ? 0.5 : 0);
+                inputState.brake = inputState.down ? 1.0 : 0;
+            }
+
+            // Update Cockpit HUD Indicators
+            const deg = Math.round(inputState.steer * 110);
+            const wheelSvg = document.getElementById('hud-wheel-svg');
+            if (wheelSvg) wheelSvg.style.transform = `rotate(${deg}deg)`;
+            document.getElementById('hud-steer-val').textContent = `${deg > 0 ? '+' : ''}${deg}°`;
+            document.getElementById('hud-gas-bar').style.height = `${Math.round(inputState.gas * 100)}%`;
+            document.getElementById('hud-brake-bar').style.height = `${Math.round(inputState.brake * 100)}%`;
+        }
+
+        function renderRawAxesTelemetry(gp) {
+            const grid = document.getElementById('raw-axes-grid');
+            if (!grid) return;
+            let html = '';
+            for (let i = 0; i < Math.min(gp.axes.length, 8); i++) {
+                const v = gp.axes[i];
+                const pct = Math.round(((v + 1) / 2) * 100);
+                html += `
+                    <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-700">
+                        <div class="flex justify-between text-xs font-mono mb-1">
+                            <span class="font-bold text-indigo-300">Axe ${i}</span>
+                            <span class="text-white">${v.toFixed(2)}</span>
+                        </div>
+                        <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div class="h-full bg-cyan-400" style="width:${pct}%"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            grid.innerHTML = html;
+        }
+
+        /***********************************************************************
+         * 4. PONT ARDUINO VIA WEB SERIAL API (BIDIRECTIONNEL)
+         ***********************************************************************/
+        let serialPort = null;
+        let serialWriter = null;
+        let serialBuffer = '';
+
+        async function connectArduinoSerial() {
+            if (!('serial' in navigator)) {
+                appendSerialLog("❌ Web Serial API non supportée. Utilise Chrome ou Edge sur PC.");
+                return;
+            }
+            try {
+                const baudRate = parseInt(document.getElementById('serial-baud').value, 10) || 9600;
+                serialPort = await navigator.serial.requestPort();
+                await serialPort.open({ baudRate });
+
+                inputState.arduinoConnected = true;
+                const badge = document.getElementById('badge-arduino');
+                const badgeTxt = document.getElementById('badge-arduino-text');
+                badge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/50";
+                badgeTxt.textContent = "Arduino ON";
+                appendSerialLog(`✔ Connecté à l'Arduino (${baudRate} bauds) !`);
+
+                // Setup Writer
+                const textEncoder = new TextEncoderStream();
+                textEncoder.readable.pipeTo(serialPort.writable);
+                serialWriter = textEncoder.writable.getWriter();
+
+                // Setup Reader Loop
+                const textDecoder = new TextDecoderStream();
+                serialPort.readable.pipeTo(textDecoder.writable);
+                const reader = textDecoder.readable.getReader();
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    if (value) {
+                        serialBuffer += value;
+                        let lines = serialBuffer.split('\n');
+                        serialBuffer = lines.pop();
+                        for (let line of lines) {
+                            parseArduinoLine(line.trim());
+                        }
+                    }
+                }
+            } catch (err) {
+                appendSerialLog(`⚠️ Connexion annulée ou erreur : ${err.message}`);
+            }
+        }
+
+        function parseArduinoLine(line) {
+            if (!line) return;
+            // Format attendu : S:512,G:800,B:0
+            if (line.includes('S:') || line.includes('G:')) {
+                inputState.arduinoHasAnalog = true;
+                const parts = line.split(',');
+                parts.forEach(p => {
+                    const [k, valStr] = p.split(':');
+                    const v = parseFloat(valStr);
+                    if (!isNaN(v)) {
+                        if (k === 'S') inputState.arduinoSteer = ((v / 1023) * 2) - 1;
+                        if (k === 'G') inputState.arduinoGas = Math.max(0, Math.min(1, v / 1023));
+                        if (k === 'B') inputState.arduinoBrake = Math.max(0, Math.min(1, v / 1023));
+                    }
+                });
+            } else {
+                appendSerialLog(`Arduino > ${line}`);
+            }
+        }
+
+        async function sendArduinoCommand(cmd) {
+            appendSerialLog(`PC -> ${cmd.trim()}`);
+            if (serialWriter) {
+                try {
+                    await serialWriter.write(cmd);
+                } catch (e) {}
+            }
+        }
+
+        function appendSerialLog(msg) {
+            const log = document.getElementById('serial-log');
+            if (!log) return;
+            const div = document.createElement('div');
+            div.textContent = msg;
+            log.appendChild(div);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function copyArduinoSketch() {
+            const code = document.getElementById('arduino-sketch-code').innerText;
+            const temp = document.createElement('textarea');
+            temp.value = code;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            const btn = document.getElementById('btn-copy-sketch');
+            btn.innerHTML = '<i class="fa-solid fa-check mr-1"></i>Copié !';
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fa-regular fa-copy mr-1"></i>Copier le code';
+            }, 2000);
+        }
+
+        /***********************************************************************
+         * 5. MOTEUR 3D THREE.JS : ROUTE SYNTHWAVE, VOITURE & PORTAILS DE QUIZ
+         ***********************************************************************/
+        let scene, camera, renderer;
+        let carGroup, frontLeftWheel, frontRightWheel, rearLeftWheel, rearRightWheel, flameLeft, flameRight;
+        let roadLines = [];
+        let roadsideProps = [];
+        let portalGroup = null;
+        let portalSignMeshes = [];
+        let particles = [];
+
+        // Constants for the 3-Lane Highway
+        const LANE_WIDTH = 4.4;
+        const LANE_X = [-LANE_WIDTH, 0, LANE_WIDTH]; // Gauche (-4.4), Centre (0), Droite (+4.4)
+        const HIGHWAY_HALF_WIDTH = 6.5;
+
+        const gameState = {
+            started: false,
+            paused: false,
+            score: 0,
+            streak: 0,
+            totalAnswered: 0,
+            correctAnswered: 0,
+            speedKmh: 90,
+            carX: 0,
+            currentLaneIndex: 1, // 0 = Gauche, 1 = Centre, 2 = Droite
+            boostTimer: 0,
+            slowTimer: 0,
+            portalZ: -125,
+            portalActive: false,
+            laneChoices: [] // [{ text: '56', isCorrect: true }, ...]
+        };
+
+        function initThreeScene() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x090619);
+            scene.fog = new THREE.FogExp2(0x090619, 0.0085);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 220);
+            camera.position.set(0, 4.3, 9.5);
+            camera.lookAt(0, 1.3, -18);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xd8b4fe, 0.75);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0x38bdf8, 1.1);
+            dirLight.position.set(15, 30, 20);
+            scene.add(dirLight);
+
+            // Retro Synthwave Sun in the Horizon
+            const sunGeo = new THREE.CircleGeometry(28, 32);
+            const sunMat = new THREE.MeshBasicMaterial({ color: 0xff007f, fog: false });
+            const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+            sunMesh.position.set(0, 18, -175);
+            scene.add(sunMesh);
+
+            buildHighway();
+            buildPlayerCar();
+            buildPortalGroup();
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function buildHighway() {
+            // Ground grid plane outside road
+            const groundGeo = new THREE.PlaneGeometry(300, 300);
+            const groundMat = new THREE.MeshLambertMaterial({ color: 0x0f0728 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -0.05;
+            scene.add(ground);
+
+            // Main Asphalt Road (3 lanes = 13.2m wide)
+            const roadWidth = LANE_WIDTH * 3 + 0.8;
+            const roadGeo = new THREE.PlaneGeometry(roadWidth, 260);
+            const roadMat = new THREE.MeshPhongMaterial({ color: 0x1e293b, shininess: 25 });
+            const road = new THREE.Mesh(roadGeo, roadMat);
+            road.rotation.x = -Math.PI / 2;
+            road.position.z = -100;
+            scene.add(road);
+
+            // Glowing Neon Side Guardrails
+            const railGeo = new THREE.BoxGeometry(0.28, 0.35, 260);
+            const leftRailMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
+            const rightRailMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+
+            const leftRail = new THREE.Mesh(railGeo, leftRailMat);
+            leftRail.position.set(-roadWidth / 2, 0.18, -100);
+            scene.add(leftRail);
+
+            const rightRail = new THREE.Mesh(railGeo, rightRailMat);
+            rightRail.position.set(roadWidth / 2, 0.18, -100);
+            scene.add(rightRail);
+
+            // Animated Dashed Lane Dividers (between Lane 0/1 and Lane 1/2)
+            const dashGeo = new THREE.PlaneGeometry(0.22, 3.8);
+            const dashMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+
+            for (let z = 10; z > -190; z -= 9) {
+                [-LANE_WIDTH / 2, LANE_WIDTH / 2].forEach(xPos => {
+                    const dash = new THREE.Mesh(dashGeo, dashMat);
+                    dash.rotation.x = -Math.PI / 2;
+                    dash.position.set(xPos, 0.02, z);
+                    scene.add(dash);
+                    roadLines.push(dash);
+                });
+            }
+
+            // Roadside Neon Speed-Arches / Trees for strong sense of speed
+            const pillarGeo = new THREE.BoxGeometry(0.45, 6.5, 0.45);
+            const pillarMatL = new THREE.MeshBasicMaterial({ color: 0xec4899 });
+            const pillarMatR = new THREE.MeshBasicMaterial({ color: 0x06b6d4 });
+
+            for (let z = 0; z > -190; z -= 16) {
+                const pL = new THREE.Mesh(pillarGeo, pillarMatL);
+                pL.position.set(-roadWidth / 2 - 2.2, 3.25, z);
+                scene.add(pL);
+                roadsideProps.push(pL);
+
+                const pR = new THREE.Mesh(pillarGeo, pillarMatR);
+                pR.position.set(roadWidth / 2 + 2.2, 3.25, z);
+                scene.add(pR);
+                roadsideProps.push(pR);
+            }
+        }
+
+        function buildPlayerCar() {
+            carGroup = new THREE.Group();
+
+            // Main Sport Chassis
+            const bodyGeo = new THREE.BoxGeometry(2.1, 0.62, 4.2);
+            const bodyMat = new THREE.MeshPhongMaterial({ color: 0x0ea5e9, shininess: 90 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.6;
+            carGroup.add(body);
+
+            // Racing Stripes
+            const stripeGeo = new THREE.PlaneGeometry(0.45, 4.22);
+            const stripeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+            const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+            stripe.rotation.x = -Math.PI / 2;
+            stripe.position.y = 0.92;
+            carGroup.add(stripe);
+
+            // Aerodynamic Cabin
+            const cabinGeo = new THREE.BoxGeometry(1.65, 0.52, 2.0);
+            const cabinMat = new THREE.MeshPhongMaterial({ color: 0x0f172a, shininess: 120 });
+            const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+            cabin.position.set(0, 1.12, -0.15);
+            carGroup.add(cabin);
+
+            // Rear Spoiler Wing
+            const wingGeo = new THREE.BoxGeometry(2.25, 0.12, 0.45);
+            const wingMat = new THREE.MeshPhongMaterial({ color: 0xf43f5e });
+            const wing = new THREE.Mesh(wingGeo, wingMat);
+            wing.position.set(0, 1.22, 1.85);
+            carGroup.add(wing);
+
+            // Glowing Taillights
+            const tailGeo = new THREE.BoxGeometry(0.55, 0.2, 0.1);
+            const tailMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+            const tailL = new THREE.Mesh(tailGeo, tailMat);
+            tailL.position.set(-0.65, 0.68, 2.11);
+            const tailR = tailL.clone();
+            tailR.position.x = 0.65;
+            carGroup.add(tailL, tailR);
+
+            // Nitro Exhaust Flames
+            const flameGeo = new THREE.ConeGeometry(0.22, 1.3, 12);
+            const flameMat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.0 });
+            flameLeft = new THREE.Mesh(flameGeo, flameMat);
+            flameLeft.rotation.x = Math.PI / 2;
+            flameLeft.position.set(-0.5, 0.45, 2.65);
+
+            flameRight = flameLeft.clone();
+            flameRight.position.x = 0.5;
+            carGroup.add(flameLeft, flameRight);
+
+            // 4 Wheels
+            const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.35, 18);
+            wheelGeo.rotateZ(Math.PI / 2);
+            const wheelMat = new THREE.MeshLambertMaterial({ color: 0x111827 });
+
+            frontLeftWheel = new THREE.Mesh(wheelGeo, wheelMat);
+            frontLeftWheel.position.set(-1.12, 0.42, -1.3);
+            frontRightWheel = frontLeftWheel.clone();
+            frontRightWheel.position.x = 1.12;
+            rearLeftWheel = frontLeftWheel.clone();
+            rearLeftWheel.position.z = 1.3;
+            rearRightWheel = frontRightWheel.clone();
+            rearRightWheel.position.z = 1.3;
+
+            carGroup.add(frontLeftWheel, frontRightWheel, rearLeftWheel, rearRightWheel);
+
+            carGroup.position.set(0, 0, 2.2);
+            scene.add(carGroup);
+        }
+
+        // Create High-Contrast Canvas Texture for each Lane Portal Sign
+        function createAnswerSignTexture(answerText, laneIdx) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            const borderColors = ['#f43f5e', '#f59e0b', '#10b981'];
+            const laneNames = ['VOIE GAUCHE', 'VOIE CENTRALE', 'VOIE DROITE'];
+
+            // Dark high-contrast background
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Glowing border
+            ctx.strokeStyle = borderColors[laneIdx];
+            ctx.lineWidth = 16;
+            ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
+
+            // Top header strip
+            ctx.fillStyle = borderColors[laneIdx];
+            ctx.fillRect(16, 16, canvas.width - 32, 52);
+
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 28px Orbitron, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(laneNames[laneIdx], canvas.width / 2, 43);
+
+            // Answer Text (Auto-scale font size for longer answers)
+            ctx.fillStyle = '#ffffff';
+            const len = String(answerText).length;
+            const fontSize = len > 14 ? 44 : (len > 8 ? 58 : 78);
+            ctx.font = `bold ${fontSize}px Fredoka, Inter, sans-serif`;
+            ctx.fillText(String(answerText), canvas.width / 2, 162);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        function buildPortalGroup() {
+            portalGroup = new THREE.Group();
+            portalSignMeshes = [];
+
+            const pillarGeo = new THREE.CylinderGeometry(0.18, 0.18, 4.6, 12);
+            const pillarMat = new THREE.MeshPhongMaterial({ color: 0x6366f1 });
+
+            // 4 Pillars separating the 3 lanes
+            [-1.5 * LANE_WIDTH, -0.5 * LANE_WIDTH, 0.5 * LANE_WIDTH, 1.5 * LANE_WIDTH].forEach(x => {
+                const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+                pillar.position.set(x, 2.3, 0);
+                portalGroup.add(pillar);
+            });
+
+            // 3 Answer Sign Boards above each lane
+            for (let i = 0; i < 3; i++) {
+                const signGeo = new THREE.BoxGeometry(LANE_WIDTH - 0.35, 2.1, 0.25);
+                const tex = createAnswerSignTexture('...', i);
+                const signMat = new THREE.MeshBasicMaterial({ map: tex });
+                const signMesh = new THREE.Mesh(signGeo, signMat);
+                signMesh.position.set(LANE_X[i], 3.3, 0);
+                portalGroup.add(signMesh);
+                portalSignMeshes.push(signMesh);
+            }
+
+            portalGroup.position.z = -125;
+            scene.add(portalGroup);
+        }
+
+        /***********************************************************************
+         * 6. LOGIQUE DU QUIZ, PORTAILS & COLLISIONS PÉDAGOGIQUES
+         ***********************************************************************/
+        function setSubject(subj) {
+            currentSubject = subj;
+            document.querySelectorAll('.subj-btn').forEach(btn => {
+                btn.className = "subj-btn px-2.5 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:bg-slate-800";
+            });
+            const activeBtn = document.getElementById(`subj-${subj}`);
+            if (activeBtn) {
+                activeBtn.className = "subj-btn px-2.5 py-1.5 rounded-xl text-xs font-bold transition bg-cyan-500 text-slate-950 shadow";
+            }
+            spawnNextQuestionPortal();
+        }
+
+        function pickRandomQuestion() {
+            let pool = [];
+            if (currentSubject === 'perso') {
+                pool = customQuestions.length > 0 ? customQuestions : DEFAULT_CUSTOM_QUESTIONS;
+            } else if (currentSubject === 'all') {
+                pool = [...DEFAULT_QUESTIONS, ...customQuestions];
+            } else {
+                pool = DEFAULT_QUESTIONS.filter(item => item.category === currentSubject);
+            }
+            if (pool.length === 0) pool = DEFAULT_QUESTIONS;
+
+            // Avoid repeating the exact same question twice in a row
+            let candidate = pool[Math.floor(Math.random() * pool.length)];
+            if (pool.length > 1 && activeQuestion && candidate.q === activeQuestion.q) {
+                candidate = pool[(pool.indexOf(candidate) + 1) % pool.length];
+            }
+            return candidate;
+        }
+
+        function spawnNextQuestionPortal() {
+            activeQuestion = pickRandomQuestion();
+
+            // Shuffle 3 choices across the 3 lanes
+            const choices = [
+                { text: activeQuestion.good, isCorrect: true },
+                { text: activeQuestion.bad[0], isCorrect: false },
+                { text: activeQuestion.bad[1], isCorrect: false }
+            ];
+            for (let i = choices.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [choices[i], choices[j]] = [choices[j], choices[i]];
+            }
+            gameState.laneChoices = choices;
+
+            // Update HUD Question Banner & Lane Previews
+            document.getElementById('q-category-badge').textContent = activeQuestion.label;
+            document.getElementById('hud-question-text').textContent = activeQuestion.q;
+
+            for (let i = 0; i < 3; i++) {
+                document.getElementById(`lane-ans-${i}`).textContent = choices[i].text;
+                if (portalSignMeshes[i]) {
+                    const oldTex = portalSignMeshes[i].material.map;
+                    portalSignMeshes[i].material.map = createAnswerSignTexture(choices[i].text, i);
+                    portalSignMeshes[i].material.needsUpdate = true;
+                    if (oldTex) oldTex.dispose();
+                }
+            }
+
+            // Place Portal at distance
+            gameState.portalZ = -135;
+            portalGroup.position.z = gameState.portalZ;
+            gameState.portalActive = true;
+
+            if (gameState.started && !gameState.paused) {
+                speakText(activeQuestion.q);
+            }
+        }
+
+        function evaluatePortalCollision() {
+            gameState.portalActive = false;
+            gameState.totalAnswered++;
+
+            const chosenLane = gameState.currentLaneIndex;
+            const choice = gameState.laneChoices[chosenLane];
+
+            if (choice && choice.isCorrect) {
+                // CORRECT ANSWER!
+                gameState.correctAnswered++;
+                gameState.streak++;
+                const bonus = 100 + (gameState.streak * 25);
+                gameState.score += bonus;
+                gameState.boostTimer = 2.2;
+
+                playSoundEffect('win');
+                sendArduinoCommand('WIN\n');
+                triggerScreenFlash('rgba(16, 185, 129, 0.35)');
+                spawnBurstParticles(carGroup.position.x, 2.0, carGroup.position.z - 1, 0x10b981);
+
+                showFeedbackBanner(
+                    true,
+                    `Bravo ! "${choice.text}" est la bonne réponse !`,
+                    activeQuestion.exp,
+                    `+${bonus} PTS`
+                );
+            } else {
+                // WRONG ANSWER -> Pedagogical Explanation + Gentle Slowdown
+                gameState.streak = 0;
+                gameState.slowTimer = 1.8;
+
+                playSoundEffect('fail');
+                sendArduinoCommand('FAIL\n');
+                triggerScreenFlash('rgba(244, 63, 94, 0.38)');
+                spawnBurstParticles(carGroup.position.x, 2.0, carGroup.position.z - 1, 0xf43f5e);
+
+                showFeedbackBanner(
+                    false,
+                    `Oups ! La bonne réponse était "${activeQuestion.good}"`,
+                    activeQuestion.exp,
+                    `ESSAYE ENCORE`
+                );
+                speakText(`Attention. ${activeQuestion.exp}`);
+            }
+
+            updateScoreHUD();
+            setTimeout(() => {
+                spawnNextQuestionPortal();
+            }, 900);
+        }
+
+        function showFeedbackBanner(isSuccess, title, explanation, pointsText) {
+            const banner = document.getElementById('feedback-banner');
+            const icon = document.getElementById('feedback-icon');
+            const titleEl = document.getElementById('feedback-title');
+            const expEl = document.getElementById('feedback-explanation');
+            const ptsEl = document.getElementById('feedback-points');
+
+            banner.classList.remove('hidden');
+            if (isSuccess) {
+                banner.className = "mt-2 rounded-2xl p-3 sm:px-5 border-2 shadow-2xl bg-emerald-950/90 border-emerald-400 text-white pointer-events-auto";
+                icon.className = "w-10 h-10 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center text-xl shrink-0";
+                icon.innerHTML = '<i class="fa-solid fa-check"></i>';
+                ptsEl.className = "font-arcade font-bold text-sm sm:text-base text-emerald-300 shrink-0";
+            } else {
+                banner.className = "mt-2 rounded-2xl p-3 sm:px-5 border-2 shadow-2xl bg-rose-950/95 border-rose-400 text-white pointer-events-auto";
+                icon.className = "w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center text-xl shrink-0";
+                icon.innerHTML = '<i class="fa-solid fa-graduation-cap"></i>';
+                ptsEl.className = "font-arcade font-bold text-xs sm:text-sm text-rose-300 shrink-0";
+            }
+
+            titleEl.textContent = title;
+            expEl.textContent = explanation;
+            ptsEl.textContent = pointsText;
+
+            clearTimeout(banner._hideTimer);
+            banner._hideTimer = setTimeout(() => {
+                banner.classList.add('hidden');
+            }, isSuccess ? 3200 : 5500);
+        }
+
+        function updateScoreHUD() {
+            document.getElementById('hud-score').textContent = gameState.score;
+            document.getElementById('hud-streak').textContent = gameState.streak;
+            const acc = gameState.totalAnswered > 0
+                ? Math.round((gameState.correctAnswered / gameState.totalAnswered) * 100)
+                : 100;
+            document.getElementById('hud-accuracy').textContent = `${acc}% RÉUSSITE`;
+        }
+
+        function triggerManualBoost() {
+            if (!gameState.started || gameState.paused) return;
+            if (gameState.boostTimer <= 0.2) {
+                gameState.boostTimer = 1.2;
+                playSoundEffect('boost');
+                sendArduinoCommand('BOOST\n');
+            }
+        }
+
+        function triggerScreenFlash(colorStr) {
+            const flash = document.getElementById('screen-flash');
+            flash.style.backgroundColor = colorStr;
+            flash.style.opacity = '1';
+            setTimeout(() => {
+                flash.style.opacity = '0';
+            }, 220);
+        }
+
+        function spawnBurstParticles(x, y, z, hexColor) {
+            const geo = new THREE.BoxGeometry(0.28, 0.28, 0.28);
+            const mat = new THREE.MeshBasicMaterial({ color: hexColor });
+            for (let i = 0; i < 22; i++) {
+                const m = new THREE.Mesh(geo, mat);
+                m.position.set(x, y, z);
+                m.userData = {
+                    vx: (Math.random() - 0.5) * 14,
+                    vy: Math.random() * 9 + 2,
+                    vz: (Math.random() - 0.5) * 14,
+                    life: 0.85
+                };
+                scene.add(m);
+                particles.push(m);
+            }
+        }
+
+        /***********************************************************************
+         * 7. BOUCLE PRINCIPALE D'ANIMATION ET DE PHYSIQUE (60 FPS)
+         ***********************************************************************/
+        let lastTime = performance.now();
+        let arduinoTelemetryTimer = 0;
+
+        function animate(now) {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(0.05, (now - lastTime) / 1000);
+            lastTime = now;
+
+            // Always poll inputs so the calibration modal works even when paused
+            pollInputs(dt);
+
+            if (!gameState.started || gameState.paused) {
+                renderer.render(scene, camera);
+                return;
+            }
+
+            // 1. Compute Car Speed (km/h) from Gas, Brake, Boost & Slowdown
+            if (gameState.boostTimer > 0) gameState.boostTimer -= dt;
+            if (gameState.slowTimer > 0) gameState.slowTimer -= dt;
+
+            let targetSpeed = 40 + (inputState.gas * 125) - (inputState.brake * 95);
+            if (gameState.boostTimer > 0) targetSpeed += 65;
+            if (gameState.slowTimer > 0) targetSpeed = Math.min(targetSpeed, 55);
+            targetSpeed = Math.max(25, Math.min(230, targetSpeed));
+
+            gameState.speedKmh += (targetSpeed - gameState.speedKmh) * Math.min(1, dt * 4.5);
+            const worldSpeed = gameState.speedKmh * 0.36; // meters/sec in 3D space
+
+            // Update Engine Audio
+            updateEngineSound(gameState.speedKmh, gameState.boostTimer > 0);
+
+            // Periodically send speed to Arduino if connected
+            arduinoTelemetryTimer += dt;
+            if (inputState.arduinoConnected && arduinoTelemetryTimer > 0.5) {
+                arduinoTelemetryTimer = 0;
+                sendArduinoCommand(`SPD:${Math.round(gameState.speedKmh)}\n`);
+            }
+
+            // 2. Compute Car Lateral X Position from Steering Wheel
+            const targetX = inputState.steer * (LANE_WIDTH * 1.15);
+            gameState.carX += (targetX - gameState.carX) * Math.min(1, dt * 8.5);
+            gameState.carX = Math.max(-HIGHWAY_HALF_WIDTH + 0.8, Math.min(HIGHWAY_HALF_WIDTH - 0.8, gameState.carX));
+            carGroup.position.x = gameState.carX;
+
+            // Dynamic Car Roll/Tilt & Front Wheel Angle
+            const lateralDelta = targetX - gameState.carX;
+            carGroup.rotation.z = -lateralDelta * 0.085;
+            carGroup.rotation.y = -lateralDelta * 0.055;
+            frontLeftWheel.rotation.y = -inputState.steer * 0.35;
+            frontRightWheel.rotation.y = -inputState.steer * 0.35;
+
+            // Determine which of the 3 lanes the car is currently aligned with
+            let laneIdx = 1;
+            if (gameState.carX < -LANE_WIDTH * 0.45) laneIdx = 0;
+            else if (gameState.carX > LANE_WIDTH * 0.45) laneIdx = 2;
+
+            if (laneIdx !== gameState.currentLaneIndex) {
+                gameState.currentLaneIndex = laneIdx;
+                for (let i = 0; i < 3; i++) {
+                    const pill = document.getElementById(`lane-preview-${i}`);
+                    if (pill) {
+                        if (i === laneIdx) pill.classList.add('active-lane');
+                        else pill.classList.remove('active-lane');
+                    }
+                }
+            }
+
+            // Nitro Flame Visuals & Camera FOV Effect
+            const isBoosting = gameState.boostTimer > 0;
+            flameLeft.material.opacity = isBoosting ? 0.85 : (inputState.gas > 0.7 ? 0.35 : 0.0);
+            flameLeft.scale.setScalar(isBoosting ? (1 + Math.sin(now * 0.04) * 0.25) : 0.6);
+            flameRight.scale.copy(flameLeft.scale);
+
+            const targetFov = isBoosting ? 72 : 60;
+            camera.fov += (targetFov - camera.fov) * dt * 5;
+            camera.updateProjectionMatrix();
+            camera.position.x += (gameState.carX * 0.38 - camera.position.x) * dt * 6;
+
+            // 3. Animate Road Lines & Roadside Pillars
+            roadLines.forEach(dash => {
+                dash.position.z += worldSpeed * dt;
+                if (dash.position.z > 12) dash.position.z -= 198;
+            });
+
+            roadsideProps.forEach(prop => {
+                prop.position.z += worldSpeed * dt;
+                if (prop.position.z > 12) prop.position.z -= 192;
+            });
+
+            // 4. Move Question Portal Toward Player
+            if (gameState.portalActive) {
+                gameState.portalZ += worldSpeed * dt;
+                portalGroup.position.z = gameState.portalZ;
+
+                // Update proximity bar
+                const pct = Math.max(0, Math.min(100, ((gameState.portalZ + 135) / 137) * 100));
+                document.getElementById('portal-proximity-bar').style.width = `${pct}%`;
+
+                // Check collision when portal reaches the car's Z (z = 2.2)
+                if (gameState.portalZ >= 1.6) {
+                    evaluatePortalCollision();
+                }
+            }
+
+            // 5. Update Burst Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.position.x += p.userData.vx * dt;
+                p.position.y += p.userData.vy * dt;
+                p.position.z += p.userData.vz * dt;
+                p.userData.vy -= 18 * dt;
+                p.userData.life -= dt;
+                p.scale.setScalar(Math.max(0.01, p.userData.life));
+                if (p.userData.life <= 0) {
+                    scene.remove(p);
+                    particles.splice(i, 1);
+                }
+            }
+
+            // 6. Update Speedometer HUD
+            const roundedKmh = Math.round(gameState.speedKmh);
+            document.getElementById('hud-speed').textContent = roundedKmh;
+            const rpmPct = Math.min(100, Math.round((roundedKmh / 220) * 100));
+            document.getElementById('hud-rpm-bar').style.width = `${rpmPct}%`;
+            const gear = Math.min(6, Math.max(1, Math.ceil(roundedKmh / 38)));
+            document.getElementById('hud-gear').textContent = isBoosting ? 'TURBO NITRO' : `RAPPORT ${gear}`;
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            if (!camera || !renderer) return;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /***********************************************************************
+         * 8. GESTION DES FENÊTRES MODALES & DÉMARRAGE DU JEU
+         ***********************************************************************/
+        function startGame() {
+            initAudioEngine();
+            document.getElementById('modal-welcome').classList.add('hidden');
+            gameState.started = true;
+            gameState.paused = false;
+            spawnNextQuestionPortal();
+        }
+
+        function togglePause() {
+            if (!gameState.started) return;
+            gameState.paused = !gameState.paused;
+            const icon = document.getElementById('icon-pause');
+            icon.className = gameState.paused ? 'fa-solid fa-play text-emerald-400' : 'fa-solid fa-pause text-cyan-400';
+        }
+
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+            if (gameState.started) gameState.paused = true;
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+            const welcomeHidden = document.getElementById('modal-welcome').classList.contains('hidden');
+            if (welcomeHidden && gameState.started) {
+                gameState.paused = false;
+                document.getElementById('icon-pause').className = 'fa-solid fa-pause text-cyan-400';
+            }
+        }
+
+        // Start Everything on Window Load
+        window.onload = function () {
+            loadCustomQuestions();
+            initThreeScene();
+            spawnNextQuestionPortal();
+            requestAnimationFrame(animate);
+        };
+    </script>
+</body>
+</html>
