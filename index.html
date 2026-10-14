@@ -1,786 +1,2221 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>L'Autoroute des Révisions — Édition Course IA</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <style>
-    :root {
-      --bg-dark: #090d16;
-      --panel-bg: rgba(15, 23, 42, 0.88);
-      --accent-cyan: #00f2fe;
-      --accent-blue: #4facfe;
-      --accent-green: #10b981;
-      --accent-amber: #f59e0b;
-      --accent-red: #ef4444;
-      --accent-purple: #a855f7;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>L'Autoroute des Révisions — Édition Garage 3D & Course IA</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js r128 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Fredoka:wght@500;600;700&family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
 
-    * {
-      box-sizing: border-box;
-      user-select: none;
-      -webkit-user-select: none;
-      margin: 0;
-      padding: 0;
-    }
+    <style>
+        :root {
+            --neon-cyan: #00f2fe;
+            --neon-green: #10b981;
+            --neon-amber: #f59e0b;
+            --neon-pink: #ec4899;
+        }
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #070b14;
+            font-family: 'Inter', sans-serif;
+            color: #f8fafc;
+        }
+        .font-arcade { font-family: 'Orbitron', sans-serif; }
+        .font-kid { font-family: 'Fredoka', sans-serif; }
 
-    body, html {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: var(--bg-dark);
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      color: #f8fafc;
-    }
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
 
-    #canvas-container {
-      position: fixed;
-      inset: 0;
-      z-index: 1;
-    }
+        /* Glassmorphism HUD */
+        .hud-glass {
+            background: rgba(15, 23, 42, 0.86);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+        }
 
-    /* HUD Principal */
-    #hud {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
-      pointer-events: none;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 12px 18px;
-    }
+        /* Grandes Fenêtres de Réponses alignées sur les Files A / B / C */
+        #lanes-answers-overlay {
+            position: fixed;
+            top: 23%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(1180px, 96vw);
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: clamp(8px, 1.8vw, 22px);
+            z-index: 15;
+            pointer-events: auto;
+            transition: opacity 0.25s ease;
+        }
+        .lane-card {
+            background: rgba(15, 23, 42, 0.92);
+            border: 4px solid rgba(255, 255, 255, 0.25);
+            border-radius: 22px;
+            padding: 12px 14px 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.65);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 122px;
+        }
+        .lane-card.lane-a { border-color: rgba(56, 189, 248, 0.7); }
+        .lane-card.lane-b { border-color: rgba(168, 85, 247, 0.7); }
+        .lane-card.lane-c { border-color: rgba(245, 158, 11, 0.7); }
 
-    .hud-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
+        .lane-card.active-lane {
+            transform: translateY(-6px) scale(1.04);
+            background: rgba(15, 23, 42, 0.98);
+            border-color: #10b981 !important;
+            box-shadow: 0 0 32px rgba(16, 185, 129, 0.75), 0 16px 36px rgba(0, 0, 0, 0.8);
+        }
+        .lane-answer-text {
+            font-family: 'Fredoka', sans-serif;
+            font-size: clamp(1.5rem, 3.2vw, 2.55rem);
+            font-weight: 700;
+            color: #ffffff;
+            line-height: 1.15;
+            margin: 6px 0;
+            word-break: break-word;
+            text-shadow: 0 3px 10px rgba(0, 0, 0, 0.8);
+        }
 
-    .stats-bar {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-      pointer-events: auto;
-    }
+        /* Segments de progression vers la Course IA */
+        .prog-seg {
+            width: 10px;
+            height: 15px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            transition: all 0.25s ease;
+        }
+        .prog-seg.filled {
+            background: linear-gradient(180deg, #fde047, #f59e0b);
+            box-shadow: 0 0 8px #f59e0b;
+            transform: scaleY(1.12);
+        }
 
-    .stat-pill {
-      background: var(--panel-bg);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      padding: 8px 14px;
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 700;
-      font-size: 0.95rem;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-    }
+        /* Bouton Course IA clignotant */
+        @keyframes racePulse {
+            0%, 100% { box-shadow: 0 0 12px rgba(245, 158, 11, 0.55); transform: scale(1); }
+            50% { box-shadow: 0 0 26px rgba(253, 224, 71, 0.95); transform: scale(1.04); }
+        }
+        .btn-race-glow {
+            animation: racePulse 2s infinite;
+        }
 
-    .stat-pill span.val {
-      color: var(--accent-cyan);
-      font-size: 1.2rem;
-      font-variant-numeric: tabular-nums;
-    }
+        /* Feux de départ 3-2-1 */
+        .start-light {
+            width: 54px;
+            height: 54px;
+            border-radius: 999px;
+            background: #1e293b;
+            border: 3px solid #475569;
+            transition: all 0.15s ease;
+        }
+        .start-light.red {
+            background: #ef4444;
+            border-color: #fca5a5;
+            box-shadow: 0 0 28px #ef4444;
+        }
+        .start-light.amber {
+            background: #f59e0b;
+            border-color: #fde047;
+            box-shadow: 0 0 28px #f59e0b;
+        }
+        .start-light.green {
+            background: #10b981;
+            border-color: #6ee7b7;
+            box-shadow: 0 0 34px #10b981;
+        }
 
-    /* Jauge de progression vers la Course IA (10 questions) */
-    .race-progress-pill {
-      background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
-      border: 2px solid var(--accent-amber);
-      padding: 8px 14px;
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      box-shadow: 0 0 18px rgba(245, 158, 11, 0.3);
-    }
+        #screen-flash {
+            pointer-events: none;
+            transition: opacity 0.3s ease-out;
+        }
 
-    .progress-segments {
-      display: flex;
-      gap: 4px;
-    }
-
-    .prog-seg {
-      width: 12px;
-      height: 16px;
-      border-radius: 4px;
-      background: rgba(255, 255, 255, 0.15);
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      transition: all 0.25s ease;
-    }
-
-    .prog-seg.filled {
-      background: linear-gradient(180deg, #fde047, #f59e0b);
-      box-shadow: 0 0 8px #f59e0b;
-      transform: scaleY(1.1);
-    }
-
-    .toolbar {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      pointer-events: auto;
-    }
-
-    .btn-tool {
-      background: var(--panel-bg);
-      color: #f8fafc;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      padding: 9px 14px;
-      border-radius: 12px;
-      font-weight: 700;
-      font-size: 0.9rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.18s ease;
-      backdrop-filter: blur(8px);
-    }
-
-    .btn-tool:hover {
-      border-color: var(--accent-cyan);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 14px rgba(0, 242, 254, 0.25);
-    }
-
-    .btn-tool.active-ok {
-      border-color: var(--accent-green);
-      background: rgba(16, 185, 129, 0.2);
-    }
-
-    .btn-tool.race-trigger {
-      background: linear-gradient(135deg, #f59e0b, #ea580c);
-      border-color: #fde047;
-      color: #fff;
-    }
-
-    /* PANNEAU QUESTION CENTRAL */
-    #question-zone {
-      align-self: center;
-      width: min(980px, 96vw);
-      margin-top: 4px;
-      pointer-events: auto;
-      transition: all 0.3s ease;
-    }
-
-    .question-banner {
-      background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(9, 13, 22, 0.92));
-      border: 3px solid var(--accent-cyan);
-      border-radius: 22px;
-      padding: 14px 24px;
-      text-align: center;
-      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.65), 0 0 25px rgba(0, 242, 254, 0.25);
-      position: relative;
-    }
-
-    .question-meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-      font-size: 0.9rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--accent-amber);
-    }
-
-    #question-text {
-      font-size: clamp(1.6rem, 3.4vw, 2.7rem);
-      font-weight: 900;
-      color: #ffffff;
-      text-shadow: 0 2px 10px rgba(0, 242, 254, 0.35);
-      line-height: 1.2;
-    }
-
-    /* NOUVEAU : LES 3 GRANDES FENÊTRES DE RÉPONSES DIRECTEMENT SUR LES FILES A / B / C */
-    #lanes-answers-overlay {
-      position: fixed;
-      top: 26%;
-      left: 50%;
-      transform: translateX(-50%);
-      width: min(1180px, 96vw);
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: clamp(10px, 2vw, 24px);
-      z-index: 12;
-      pointer-events: auto;
-      transition: opacity 0.3s ease, transform 0.3s ease;
-    }
-
-    .lane-answer-card {
-      background: rgba(15, 23, 42, 0.9);
-      border: 4px solid rgba(255, 255, 255, 0.28);
-      border-radius: 22px;
-      padding: 14px 16px 18px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1);
-      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(8px);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 128px;
-      position: relative;
-    }
-
-    .lane-answer-card.lane-a {
-      border-color: rgba(56, 189, 248, 0.65);
-    }
-    .lane-answer-card.lane-b {
-      border-color: rgba(168, 85, 247, 0.65);
-    }
-    .lane-answer-card.lane-c {
-      border-color: rgba(245, 158, 11, 0.65);
-    }
-
-    .lane-badge {
-      font-size: 0.95rem;
-      font-weight: 900;
-      padding: 4px 14px;
-      border-radius: 999px;
-      margin-bottom: 8px;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .lane-a .lane-badge {
-      background: #0284c7;
-      color: #fff;
-    }
-    .lane-b .lane-badge {
-      background: #7e22ce;
-      color: #fff;
-    }
-    .lane-c .lane-badge {
-      background: #d97706;
-      color: #fff;
-    }
-
-    .lane-answer-value {
-      font-size: clamp(1.65rem, 3.3vw, 2.65rem);
-      font-weight: 900;
-      color: #ffffff;
-      line-height: 1.15;
-      word-break: break-word;
-      text-shadow: 0 3px 8px rgba(0, 0, 0, 0.7);
-    }
-
-    .lane-target-indicator {
-      margin-top: 8px;
-      font-size: 0.8rem;
-      font-weight: 800;
-      padding: 3px 10px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.1);
-      color: #cbd5e1;
-      opacity: 0.75;
-      transition: all 0.18s ease;
-    }
-
-    /* Mise en évidence quand la voiture est alignée sur cette file */
-    .lane-answer-card.selected {
-      transform: translateY(-6px) scale(1.05);
-      background: rgba(15, 23, 42, 0.98);
-      border-color: #10b981;
-      box-shadow: 0 0 30px rgba(16, 185, 129, 0.65), 0 16px 35px rgba(0, 0, 0, 0.75);
-    }
-
-    .lane-answer-card.selected .lane-target-indicator {
-      background: #10b981;
-      color: #052e16;
-      opacity: 1;
-      font-weight: 900;
-    }
-
-    /* HUD DU MODE COURSE IA */
-    #race-hud {
-      display: none;
-      align-self: center;
-      width: min(920px, 95vw);
-      background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.92));
-      border: 3px solid #f59e0b;
-      border-radius: 22px;
-      padding: 14px 24px;
-      box-shadow: 0 0 35px rgba(245, 158, 11, 0.45);
-      pointer-events: auto;
-    }
-
-    .race-hud-grid {
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 16px;
-      text-align: center;
-    }
-
-    .race-metric-label {
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      font-weight: 800;
-      color: #cbd5e1;
-      letter-spacing: 1px;
-    }
-
-    .race-metric-val {
-      font-size: clamp(1.8rem, 3.5vw, 2.6rem);
-      font-weight: 900;
-      color: #fde047;
-    }
-
-    .btn-nitro-race {
-      background: linear-gradient(135deg, #00f2fe, #4facfe);
-      color: #090d16;
-      border: none;
-      padding: 12px 22px;
-      border-radius: 16px;
-      font-size: 1.15rem;
-      font-weight: 900;
-      cursor: pointer;
-      box-shadow: 0 0 20px rgba(0, 242, 254, 0.6);
-      transition: transform 0.15s ease;
-    }
-
-    .btn-nitro-race:active {
-      transform: scale(0.95);
-    }
-
-    /* Bas de l'écran : Compteur vitesse + Contrôles */
-    .hud-bottom {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .driving-options {
-      background: var(--panel-bg);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      padding: 10px 14px;
-      border-radius: 16px;
-      pointer-events: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      font-size: 0.88rem;
-    }
-
-    .driving-options label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      font-weight: 700;
-    }
-
-    .touch-controls {
-      display: flex;
-      gap: 10px;
-      pointer-events: auto;
-    }
-
-    .btn-lane {
-      background: rgba(15, 23, 42, 0.9);
-      border: 2px solid rgba(255, 255, 255, 0.25);
-      color: #fff;
-      padding: 12px 18px;
-      border-radius: 16px;
-      font-weight: 900;
-      font-size: 1.05rem;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-
-    .btn-lane:active {
-      transform: scale(0.94);
-      border-color: var(--accent-cyan);
-    }
-
-    .speedometer {
-      background: var(--panel-bg);
-      border: 2px solid rgba(0, 242, 254, 0.35);
-      border-radius: 20px;
-      padding: 10px 20px;
-      text-align: right;
-      min-width: 165px;
-      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.45);
-    }
-
-    .speed-val {
-      font-size: 2.3rem;
-      font-weight: 900;
-      color: var(--accent-cyan);
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .speed-unit {
-      font-size: 0.85rem;
-      color: #94a3b8;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-
-    .pedals-bars {
-      margin-top: 6px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .bar-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.72rem;
-      color: #94a3b8;
-      font-weight: 700;
-    }
-
-    .bar-track {
-      flex: 1;
-      height: 6px;
-      background: rgba(255, 255, 255, 0.12);
-      border-radius: 99px;
-      overflow: hidden;
-    }
-
-    .bar-fill {
-      height: 100%;
-      width: 0%;
-      transition: width 0.06s linear;
-    }
-
-    /* Toast de feedback central */
-    #feedback-toast {
-      position: fixed;
-      top: 52%;
-      left: 50%;
-      transform: translate(-50%, -50%) scale(0.8);
-      z-index: 25;
-      padding: 18px 32px;
-      border-radius: 22px;
-      font-size: clamp(1.4rem, 3vw, 2.3rem);
-      font-weight: 900;
-      text-align: center;
-      pointer-events: none;
-      opacity: 0;
-      transition: all 0.22s cubic-bezier(0.18, 0.89, 0.32, 1.28);
-      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.65);
-    }
-
-    #feedback-toast.show {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
-    }
-
-    /* Modales (Volant, Arduino, Devoirs, Podium Course IA) */
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 50;
-      background: rgba(5, 8, 15, 0.82);
-      backdrop-filter: blur(8px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-
-    .modal-backdrop.open {
-      display: flex;
-    }
-
-    .modal-card {
-      background: #0f172a;
-      border: 2px solid rgba(0, 242, 254, 0.4);
-      border-radius: 22px;
-      width: min(740px, 96vw);
-      max-height: 90vh;
-      overflow-y: auto;
-      padding: 24px;
-      color: #f8fafc;
-      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8);
-    }
-
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    }
-
-    .modal-header h2 {
-      font-size: 1.4rem;
-      color: var(--accent-cyan);
-    }
-
-    .btn-close {
-      background: rgba(239, 68, 68, 0.2);
-      color: #fca5a5;
-      border: 1px solid #ef4444;
-      padding: 6px 14px;
-      border-radius: 10px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 12px;
-      margin: 12px 0;
-    }
-
-    .form-group {
-      background: rgba(255, 255, 255, 0.04);
-      padding: 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 0.85rem;
-      color: #94a3b8;
-      margin-bottom: 6px;
-      font-weight: 700;
-    }
-
-    select, input[type="text"], input[type="number"], textarea {
-      width: 100%;
-      background: #1e293b;
-      color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-size: 0.95rem;
-    }
-
-    pre.code-box {
-      background: #020617;
-      color: #38bdf8;
-      padding: 14px;
-      border-radius: 12px;
-      overflow-x: auto;
-      font-size: 0.82rem;
-      line-height: 1.4;
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      margin-top: 10px;
-    }
-
-    @media (max-width: 768px) {
-      #lanes-answers-overlay {
-        top: 23%;
-        gap: 8px;
-      }
-      .lane-answer-card {
-        min-height: 98px;
-        padding: 10px 8px;
-      }
-      .lane-badge {
-        font-size: 0.75rem;
-        padding: 3px 8px;
-      }
-    }
-  </style>
+        @media (max-width: 768px) {
+            #lanes-answers-overlay {
+                top: 21%;
+            }
+            .lane-card {
+                min-height: 94px;
+                padding: 8px 6px;
+            }
+        }
+    </style>
 </head>
-<body>
-  <div id="canvas-container"></div>
+<body class="relative select-none">
 
-  <!-- HUD PRINCIPAL -->
-  <div id="hud">
-    <div class="hud-top">
-      <div class="stats-bar">
-        <div class="stat-pill">⭐ Score <span class="val" id="score-val">0</span></div>
-        <div class="stat-pill">🔥 Série <span class="val" id="streak-val">0</span></div>
-        <div class="race-progress-pill" title="Réponds juste à 10 questions pour débloquer la Course contre les Pilotes IA !">
-          <span>🏆 Course IA : <strong id="race-counter-text">0 / 10</strong></span>
-          <div class="progress-segments" id="race-segments"></div>
+    <!-- Conteneur 3D Three.js -->
+    <div id="canvas-container"></div>
+
+    <!-- Flash Écran (Vert / Rouge / Cyan) -->
+    <div id="screen-flash" class="fixed inset-0 z-10 opacity-0"></div>
+
+    <!-- ==================== HUD SUPÉRIEUR (TOUJOURS CLIQUABLE) ==================== -->
+    <header class="fixed top-0 left-0 right-0 z-30 p-2 sm:p-3.5 pointer-events-none flex flex-col gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-2 pointer-events-auto">
+            <!-- Gauche : Score, Série & Jauge Course IA cliquable -->
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="hud-glass px-3 py-1.5 rounded-2xl flex items-center gap-3">
+                    <div class="flex items-center gap-1.5 font-arcade font-bold text-emerald-400 text-xs sm:text-sm">
+                        <i class="fa-solid fa-trophy"></i>
+                        <span id="hud-score">0</span> <span class="text-[10px] text-slate-400">PTS</span>
+                    </div>
+                    <div class="h-4 w-[1px] bg-slate-700"></div>
+                    <div class="flex items-center gap-1 font-arcade font-bold text-amber-400 text-xs sm:text-sm">
+                        <i class="fa-solid fa-fire"></i>
+                        <span id="hud-streak">0</span>
+                    </div>
+                </div>
+
+                <!-- Jauge 10 Questions -> Course IA (Cliquable pour lancer tout de suite !) -->
+                <button onclick="launchAIRaceNow()" title="Clique ici ou réponds à 10 questions pour lancer la Course contre les Pilotes IA !" class="hud-glass px-3 py-1.5 rounded-2xl border-2 border-amber-500/70 hover:border-amber-300 flex items-center gap-2.5 cursor-pointer transition active:scale-95">
+                    <span class="text-xs font-bold text-amber-300 flex items-center gap-1">
+                        🏆 Défi Course : <strong id="race-counter-text" class="text-white">0 / 10</strong>
+                    </span>
+                    <div id="race-segments" class="hidden sm:flex items-center gap-1"></div>
+                </button>
+            </div>
+
+            <!-- Centre / Droite : Bouton LANCER LA COURSE IA + Garage + Outils -->
+            <div class="flex flex-wrap items-center gap-1.5">
+                <!-- BOUTON DIRECT COURSE IA -->
+                <button onclick="launchAIRaceNow()" id="btn-launch-race" class="btn-race-glow px-3.5 py-2 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-slate-950 font-arcade font-black text-xs sm:text-sm shadow-xl flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-flag-checkered"></i>
+                    <span>🏁 LANCER LA COURSE IA</span>
+                </button>
+
+                <!-- BOUTON GARAGE 3D -->
+                <button onclick="openModal('modal-garage')" class="px-3 py-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg flex items-center gap-1.5 border border-purple-300/40 cursor-pointer transition">
+                    <i class="fa-solid fa-warehouse"></i>
+                    <span>🏎️ Garage</span>
+                </button>
+
+                <!-- BOUTON SIRÈNE PIN-PON (Utile pour Pompier & Police) -->
+                <button onclick="toggleSiren()" id="btn-siren" class="px-2.5 py-2 rounded-2xl hud-glass hover:bg-rose-900/60 text-rose-300 font-bold text-xs flex items-center gap-1 border border-rose-500/40 cursor-pointer transition" title="Activer la sirène Pin-Pon et les gyrophares !">
+                    <i class="fa-solid fa-light-emergency-on text-rose-400"></i>
+                    <span class="hidden md:inline">🚨 Sirène</span>
+                </button>
+
+                <!-- Filtre Matière -->
+                <button onclick="cycleSubject()" id="btn-subject" class="px-2.5 py-2 rounded-2xl hud-glass hover:bg-slate-800 text-cyan-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition">
+                    <i class="fa-solid fa-layer-group"></i>
+                    <span id="lbl-subject">Matière : Toutes</span>
+                </button>
+
+                <!-- Volant USB -->
+                <button onclick="openModal('modal-wheel')" class="px-2.5 py-2 rounded-2xl hud-glass hover:bg-slate-800 text-indigo-300 font-bold text-xs flex items-center gap-1 cursor-pointer transition" title="Configurer le Volant Logitech">
+                    <i class="fa-solid fa-dharmachakra"></i>
+                    <span id="badge-wheel-text" class="hidden lg:inline">Volant</span>
+                </button>
+
+                <!-- Arduino -->
+                <button onclick="openModal('modal-arduino')" class="px-2.5 py-2 rounded-2xl hud-glass hover:bg-slate-800 text-emerald-300 font-bold text-xs flex items-center gap-1 cursor-pointer transition" title="Connecter un Arduino">
+                    <i class="fa-brands fa-usb"></i>
+                    <span class="hidden xl:inline">Arduino</span>
+                </button>
+
+                <!-- Éditeur de Devoirs -->
+                <button onclick="openModal('modal-homework')" class="px-2.5 py-2 rounded-2xl hud-glass hover:bg-slate-800 text-amber-300 font-bold text-xs flex items-center gap-1 cursor-pointer transition" title="Ajouter des Devoirs">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <span class="hidden lg:inline">Devoirs</span>
+                </button>
+
+                <!-- Son & Voix -->
+                <button onclick="toggleTTS()" id="btn-tts" class="px-2.5 py-2 rounded-2xl hud-glass hover:bg-slate-800 text-cyan-300 text-xs cursor-pointer transition" title="Activer/Couper la lecture vocale">
+                    <i id="icon-tts" class="fa-solid fa-volume-high"></i>
+                </button>
+            </div>
         </div>
-      </div>
 
-      <div class="toolbar">
-        <button class="btn-tool race-trigger" id="btn-start-race-now" title="Lancer la course récompense immédiatement">🏁 Course IA</button>
-        <button class="btn-tool" id="btn-subject">📚 Matière : Toutes</button>
-        <button class="btn-tool" id="btn-voice">🔊 Voix : ON</button>
-        <button class="btn-tool" id="btn-wheel">🛞 Volant</button>
-        <button class="btn-tool" id="btn-arduino">🔌 Arduino</button>
-        <button class="btn-tool" id="btn-homework">✏️ Devoirs</button>
-      </div>
+        <!-- BANDEAU DE LA QUESTION (Affiché en mode QUIZ) -->
+        <div id="quiz-question-banner" class="w-full max-w-4xl mx-auto pointer-events-auto">
+            <div class="hud-glass rounded-2xl px-4 py-2.5 border-2 border-cyan-400/60 shadow-2xl text-center relative">
+                <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-cyan-300 mb-0.5">
+                    <span id="q-category-badge" class="bg-cyan-500/20 px-2.5 py-0.5 rounded-full border border-cyan-400/40">MATHÉMATIQUES</span>
+                    <button onclick="speakCurrentQuestion()" class="hover:text-white flex items-center gap-1 bg-slate-800/80 px-2.5 py-0.5 rounded-lg">
+                        <i class="fa-solid fa-ear-listen text-cyan-400"></i> Réécouter la question
+                    </button>
+                    <span class="hidden sm:inline text-amber-300">Dirige la voiture sur la File A, B ou C !</span>
+                </div>
+                <div id="hud-question-text" class="font-kid text-xl sm:text-3xl md:text-4xl font-bold text-white tracking-wide py-0.5 drop-shadow">
+                    7 × 8 = ?
+                </div>
+            </div>
+        </div>
+
+        <!-- BANDEAU DE LA COURSE LIBRE CONTRE LES PILOTES IA (Affiché en mode RACE) -->
+        <div id="race-hud-banner" class="hidden w-full max-w-4xl mx-auto pointer-events-auto">
+            <div class="hud-glass rounded-2xl px-4 py-3 border-2 border-amber-400 shadow-2xl">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-4 sm:gap-6">
+                        <div class="text-center">
+                            <div class="text-[10px] font-bold uppercase text-amber-300 tracking-wider">🏁 Position</div>
+                            <div id="race-rank-val" class="font-arcade font-black text-xl sm:text-3xl text-yellow-300">6e / 6</div>
+                        </div>
+                        <div class="h-8 w-[1px] bg-slate-700"></div>
+                        <div class="text-center">
+                            <div class="text-[10px] font-bold uppercase text-cyan-300 tracking-wider">⏱️ Chrono Course</div>
+                            <div id="race-timer-val" class="font-arcade font-black text-xl sm:text-3xl text-white">45s</div>
+                        </div>
+                        <div class="h-8 w-[1px] bg-slate-700"></div>
+                        <div class="text-center">
+                            <div class="text-[10px] font-bold uppercase text-emerald-300 tracking-wider">🚀 Voitures doublées</div>
+                            <div id="race-overtakes-val" class="font-arcade font-black text-xl sm:text-3xl text-emerald-400">0</div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <button onclick="triggerManualBoost()" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-arcade font-black text-xs sm:text-sm shadow-lg active:scale-95 cursor-pointer">
+                            ⚡ NITRO (Espace)
+                        </button>
+                        <button onclick="stopRaceAndReturnToQuiz()" class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-600 cursor-pointer">
+                            ↩️ Retour Révisions
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ==================== LES 3 GRANDES FENÊTRES DE RÉPONSES ALIGNÉES SUR LES FILES A / B / C ==================== -->
+    <div id="lanes-answers-overlay">
+        <!-- FILE A (Gauche) -->
+        <div id="card-lane-0" onclick="selectLaneByClick(0)" class="lane-card lane-a">
+            <div class="w-full flex items-center justify-between">
+                <span class="px-3 py-0.5 rounded-full bg-sky-600 text-white font-arcade font-bold text-xs sm:text-sm tracking-wide">
+                    ⬅️ FILE A
+                </span>
+                <span class="text-[11px] text-sky-300 font-bold hidden sm:inline">Voie Gauche</span>
+            </div>
+            <div id="ans-val-0" class="lane-answer-text">54</div>
+            <div id="ind-lane-0" class="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-slate-800 text-slate-300">
+                Cliquer ou tourner à gauche
+            </div>
+        </div>
+
+        <!-- FILE B (Centre) -->
+        <div id="card-lane-1" onclick="selectLaneByClick(1)" class="lane-card lane-b active-lane">
+            <div class="w-full flex items-center justify-between">
+                <span class="px-3 py-0.5 rounded-full bg-purple-600 text-white font-arcade font-bold text-xs sm:text-sm tracking-wide">
+                    ⬆️ FILE B
+                </span>
+                <span class="text-[11px] text-purple-300 font-bold hidden sm:inline">Voie Centrale</span>
+            </div>
+            <div id="ans-val-1" class="lane-answer-text">56</div>
+            <div id="ind-lane-1" class="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-500 text-slate-950">
+                ✅ VOITURE SUR FILE B
+            </div>
+        </div>
+
+        <!-- FILE C (Droite) -->
+        <div id="card-lane-2" onclick="selectLaneByClick(2)" class="lane-card lane-c">
+            <div class="w-full flex items-center justify-between">
+                <span class="px-3 py-0.5 rounded-full bg-amber-600 text-white font-arcade font-bold text-xs sm:text-sm tracking-wide">
+                    ➡️ FILE C
+                </span>
+                <span class="text-[11px] text-amber-300 font-bold hidden sm:inline">Voie Droite</span>
+            </div>
+            <div id="ans-val-2" class="lane-answer-text">64</div>
+            <div id="ind-lane-2" class="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-slate-800 text-slate-300">
+                Cliquer ou tourner à droite
+            </div>
+        </div>
     </div>
 
-    <!-- ZONE QUESTION (Mode Révision) -->
-    <div id="question-zone">
-      <div class="question-banner">
-        <div class="question-meta">
-          <span id="question-category">MATHÉMATIQUES</span>
-          <span>Choisis la File A, B ou C avec le volant !</span>
+    <!-- ==================== FEUX DE DÉPART 3 - 2 - 1 - PARTEZ ! ==================== -->
+    <div id="race-countdown-overlay" class="fixed inset-0 z-40 hidden pointer-events-none flex flex-col items-center justify-center bg-slate-950/45 backdrop-blur-[2px]">
+        <div class="hud-glass p-6 sm:p-8 rounded-3xl border-2 border-amber-400 text-center shadow-2xl">
+            <div class="font-arcade font-black text-sm sm:text-base text-amber-300 uppercase tracking-widest mb-3">
+                🏆 Départ de la Course contre les 5 Pilotes IA
+            </div>
+            <div class="flex items-center justify-center gap-4 my-3">
+                <div id="light-1" class="start-light"></div>
+                <div id="light-2" class="start-light"></div>
+                <div id="light-3" class="start-light"></div>
+            </div>
+            <div id="countdown-big-text" class="font-arcade font-black text-4xl sm:text-6xl text-white mt-2">
+                PRÊT ?
+            </div>
         </div>
-        <div id="question-text">7 × 8 = ?</div>
-      </div>
     </div>
 
-    <!-- HUD DE COURSE CONTRE LES PILOTES IA (Mode Récompense) -->
-    <div id="race-hud">
-      <div class="race-hud-grid">
-        <div>
-          <div class="race-metric-label">🏁 Classement</div>
-          <div class="race-metric-val" id="race-rank-val">6e / 6</div>
+    <!-- ==================== BANNIÈRE DE FEEDBACK CENTRAL ==================== -->
+    <div id="feedback-toast" class="fixed top-[54%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none opacity-0 transition-all duration-200 scale-90">
+        <div id="feedback-box" class="px-6 py-4 rounded-3xl border-4 shadow-2xl text-center max-w-lg">
+            <div id="feedback-title" class="font-kid font-extrabold text-xl sm:text-3xl text-white"></div>
+            <div id="feedback-sub" class="text-xs sm:text-base text-slate-100 mt-1 font-semibold"></div>
         </div>
-        <div>
-          <div class="race-metric-label">⏱️ Temps Restant</div>
-          <div class="race-metric-val" id="race-timer-val">45s</div>
-        </div>
-        <div>
-          <div class="race-metric-label">🚀 Dépassements</div>
-          <div class="race-metric-val" id="race-overtakes-val">0</div>
-        </div>
-        <div>
-          <button class="btn-nitro-race" id="btn-race-nitro">⚡ NITRO (Espace)</button>
-        </div>
-      </div>
     </div>
 
-    <!-- BAS DU HUD -->
-    <div class="hud-bottom">
-      <div class="driving-options">
-        <label>
-          <input type="checkbox" id="chk-cruise" checked />
-          Régulateur Auto (avance sans pédale)
-        </label>
-        <div id="input-status-label" style="color: #94a3b8; font-size: 0.8rem;">
-          🎮 Contrôle : Clavier (Flèches / A-B-C) ou Volant USB
+    <!-- ==================== HUD INFÉRIEUR : VOLANT, BOUTONS FILE A/B/C & COMPTEUR ==================== -->
+    <footer class="fixed bottom-0 left-0 right-0 z-30 p-2 sm:p-4 pointer-events-none flex items-end justify-between gap-2">
+        <!-- Gauche : Volant Virtuel & Pédales -->
+        <div class="hud-glass rounded-2xl p-2.5 sm:p-3 pointer-events-auto flex items-center gap-3">
+            <div class="flex flex-col items-center">
+                <div class="w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center">
+                    <svg id="hud-wheel-svg" viewBox="0 0 100 100" class="w-full h-full">
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="#334155" stroke-width="10"/>
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="#38bdf8" stroke-width="10" stroke-dasharray="60 220" stroke-dashoffset="-75"/>
+                        <rect x="47" y="3" width="6" height="11" rx="2" fill="#f43f5e"/>
+                        <path d="M12 50 L88 50 M50 50 L50 88" stroke="#94a3b8" stroke-width="8" stroke-linecap="round"/>
+                        <circle cx="50" cy="50" r="14" fill="#1e293b" stroke="#38bdf8" stroke-width="3"/>
+                    </svg>
+                </div>
+                <span id="hud-steer-val" class="font-arcade text-[10px] text-slate-300">0°</span>
+            </div>
+
+            <!-- Barres Frein & Gaz -->
+            <div class="flex items-end gap-2 h-14">
+                <div class="flex flex-col items-center h-full justify-end">
+                    <div class="w-3.5 h-10 bg-slate-800 rounded overflow-hidden border border-slate-700 flex items-end">
+                        <div id="hud-brake-bar" class="w-full bg-rose-500 transition-all duration-75" style="height:0%"></div>
+                    </div>
+                    <span class="text-[9px] font-bold text-rose-400 mt-0.5">FREIN</span>
+                </div>
+                <div class="flex flex-col items-center h-full justify-end">
+                    <div class="w-3.5 h-10 bg-slate-800 rounded overflow-hidden border border-slate-700 flex items-end">
+                        <div id="hud-gas-bar" class="w-full bg-emerald-400 transition-all duration-75" style="height:55%"></div>
+                    </div>
+                    <span class="text-[9px] font-bold text-emerald-400 mt-0.5">GAZ</span>
+                </div>
+            </div>
+
+            <div class="hidden md:flex flex-col gap-1 border-l border-slate-700 pl-3 text-xs">
+                <label class="flex items-center gap-1.5 cursor-pointer text-slate-200 font-semibold">
+                    <input type="checkbox" id="hud-cruise-toggle" checked onchange="toggleCruiseMode(this.checked)" class="rounded accent-cyan-400">
+                    <span>Régulateur Auto</span>
+                </label>
+                <span id="hud-vehicle-name" class="text-[11px] text-cyan-300 font-bold">🏎️ Supercar Éclair</span>
+            </div>
         </div>
-      </div>
 
-      <div class="touch-controls">
-        <button class="btn-lane" onclick="setLaneTarget(-1)">⬅️ FILE A</button>
-        <button class="btn-lane" onclick="setLaneTarget(0)">⬆️ FILE B</button>
-        <button class="btn-lane" onclick="setLaneTarget(1)">➡️ FILE C</button>
-      </div>
-
-      <div class="speedometer">
-        <div class="speed-val" id="speed-val">110</div>
-        <div class="speed-unit">km/h</div>
-        <div class="pedals-bars">
-          <div class="bar-row">
-            <span>ACC</span>
-            <div class="bar-track"><div class="bar-fill" id="bar-throttle" style="background:#10b981;"></div></div>
-          </div>
-          <div class="bar-row">
-            <span>FREIN</span>
-            <div class="bar-track"><div class="bar-fill" id="bar-brake" style="background:#ef4444;"></div></div>
-          </div>
+        <!-- Centre : Boutons directs FILE A / FILE B / FILE C + NITRO -->
+        <div class="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+            <button onclick="selectLaneByClick(0)" class="px-3 sm:px-4 h-12 sm:h-14 rounded-2xl hud-glass hover:bg-sky-500/30 active:scale-95 text-sky-300 font-arcade font-bold text-xs sm:text-sm border border-sky-400/40 cursor-pointer">
+                ⬅️ FILE A
+            </button>
+            <button onclick="selectLaneByClick(1)" class="px-3 sm:px-4 h-12 sm:h-14 rounded-2xl hud-glass hover:bg-purple-500/30 active:scale-95 text-purple-300 font-arcade font-bold text-xs sm:text-sm border border-purple-400/40 cursor-pointer">
+                ⬆️ FILE B
+            </button>
+            <button onclick="selectLaneByClick(2)" class="px-3 sm:px-4 h-12 sm:h-14 rounded-2xl hud-glass hover:bg-amber-500/30 active:scale-95 text-amber-300 font-arcade font-bold text-xs sm:text-sm border border-amber-400/40 cursor-pointer">
+                ➡️ FILE C
+            </button>
+            <button onclick="triggerManualBoost()" class="px-3 sm:px-4 h-12 sm:h-14 rounded-2xl bg-gradient-to-b from-amber-400 to-orange-500 text-slate-950 font-arcade font-black text-xs shadow-lg active:scale-95 cursor-pointer">
+                🔥 NITRO
+            </button>
         </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- LES 3 GRANDES FENÊTRES DE RÉPONSES ALIGNÉES SUR LES FILES A / B / C -->
-  <div id="lanes-answers-overlay">
-    <div class="lane-answer-card lane-a" id="card-lane-0" onclick="setLaneTarget(-1)">
-      <div class="lane-badge">⬅️ FILE A — Gauche</div>
-      <div class="lane-answer-value" id="ans-val-0">54</div>
-      <div class="lane-target-indicator" id="ind-lane-0">Tourne à gauche</div>
-    </div>
-
-    <div class="lane-answer-card lane-b selected" id="card-lane-1" onclick="setLaneTarget(0)">
-      <div class="lane-badge">⬆️ FILE B — Centre</div>
-      <div class="lane-answer-value" id="ans-val-1">56</div>
-      <div class="lane-target-indicator" id="ind-lane-1">✅ VOITURE SUR FILE B</div>
-    </div>
-
-    <div class="lane-answer-card lane-c" id="card-lane-2" onclick="setLaneTarget(1)">
-      <div class="lane-badge">➡️ FILE C — Droite</div>
-      <div class="lane-answer-value" id="ans-val-2">64</div>
-      <div class="lane-target-indicator" id="ind-lane-2">Tourne à droite</div>
-    </div>
-  </div>
-
-  <!-- TOAST FEEDBACK -->
-  <div id="feedback-toast">BRAVO ! +100</div>
-
-  <!-- MODALE PODIUM FIN DE COURSE IA -->
-  <div class="modal-backdrop" id="modal-podium">
-    <div class="modal-card" style="text-align:center;">
-      <div style="font-size: 4rem; margin-bottom: 8px;" id="podium-trophy">🏆</div>
-      <h2 style="font-size: 2rem; color: #fde047; margin-bottom: 8px;" id="podium-title">COURSE TERMINÉE !</h2>
-      <p style="font-size: 1.25rem; margin-bottom: 18px; color: #e2e8f0;" id="podium-summary">
-        Maxime termine 1er avec 8 dépassements !
-      </p>
-      <button class="btn-nitro-race" style="font-size:1.3rem; padding:14px 32px;" onclick="closePodiumAndResume()">
-        🚗 Reprendre la route des révisions !
-      </button>
-    </div>
-  </div>
-
-  <!-- MODALE CALIBRATION VOLANT LOGITECH -->
-  <div class="modal-backdrop" id="modal-wheel">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h2>🛞 Configuration Volant & Pédalier Logitech (Gamepad API)</h2>
-        <button class="btn-close" onclick="closeModals()">Fermer</button>
-      </div>
-      <p style="color:#cbd5e1; font-size:0.92rem; margin-bottom:12px;">
-        Branche le volant en USB et appuie sur un bouton ou tourne le volant pour l'activer.
-      </p>
-      <div id="gamepad-status-box" style="padding:10px; border-radius:10px; background:rgba(255,255,255,0.06); font-weight:700; margin-bottom:12px;">
-        Aucun volant détecté pour l'instant (tourne le volant ou appuie sur une pédale).
-      </div>
-      <div class="form-grid">
-        <div class="form-group">
-          <label>Axe de direction (Volant)</label>
-          <select id="sel-axis-steer"><option value="0" selected>Axe 0 (Standard Logitech)</option><option value="1">Axe 1</option><option value="2">Axe 2</option></select>
+        <!-- Droite : Compteur de vitesse -->
+        <div class="hud-glass rounded-2xl p-2.5 sm:px-4 pointer-events-auto text-right">
+            <div class="flex items-baseline justify-end gap-1">
+                <span id="hud-speed" class="font-arcade font-black text-2xl sm:text-4xl text-cyan-300">115</span>
+                <span class="font-arcade text-xs text-slate-400">KM/H</span>
+            </div>
+            <div class="w-24 sm:w-32 h-2 bg-slate-800 rounded-full overflow-hidden mt-1 border border-slate-700">
+                <div id="hud-rpm-bar" class="h-full bg-gradient-to-r from-cyan-400 via-amber-400 to-rose-500" style="width: 55%"></div>
+            </div>
         </div>
-        <div class="form-group">
-          <label>Axe Accélérateur</label>
-          <select id="sel-axis-throttle"><option value="1">Axe 1</option><option value="2" selected>Axe 2 (Standard G29/G27)</option><option value="5">Axe 5</option></select>
-        </div>
-        <div class="form-group">
-          <label>Axe Frein</label>
-          <select id="sel-axis-brake"><option value="1">Axe 1</option><option value="2">Axe 2</option><option value="5" selected>Axe 5 (Standard G29/G27)</option><option value="3">Axe 3</option></select>
-        </div>
-        <div class="form-group">
-          <label>Sensibilité du volant</label>
-          <input type="number" id="inp-steer-sens" value="1.8" step="0.2" min="0.6" max="4.0" />
-        </div>
-      </div>
-      <label style="display:flex; align-items:center; gap:8px; margin-top:8px; font-weight:700; cursor:pointer;">
-        <input type="checkbox" id="chk-invert-pedals" checked />
-        Inverser les pédales Logitech (+1 relâché vers -1 appuyé)
-      </label>
-      <div id="axes-live-monitor" style="margin-top:14px; font-family:monospace; font-size:0.85rem; color:#38bdf8;"></div>
-    </div>
-  </div>
+    </footer>
 
-  <!-- MODALE ARDUINO WEB SERIAL -->
-  <div class="modal-backdrop" id="modal-arduino">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h2>🔌 Connexion Arduino (Cockpit LEDs / Buzzer / Pédalier)</h2>
-        <button class="btn-close" onclick="closeModals()">Fermer</button>
-      </div>
-      <p style="color:#cbd5e1; font-size:0.9rem; margin-bottom:12px;">
-        Connecte ton Arduino en USB sur Chrome ou Edge. Le jeu envoie automatiquement <code>WIN</code>, <code>FAIL</code>, <code>BOOST</code>, <code>RACE</code> et la vitesse, et lit les valeurs si tu branches un pédalier sur A0/A1.
-      </p>
-      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
-        <button class="btn-tool" style="background:#0284c7;" onclick="connectArduino()">🔌 Connecter le port USB Arduino</button>
-        <button class="btn-tool" onclick="sendSerialCommand('WIN')">Tester WIN</button>
-        <button class="btn-tool" onclick="sendSerialCommand('FAIL')">Tester FAIL</button>
-        <button class
+    <!-- ==================== MODALE 1 : GARAGE 3D (VOITURES À DÉBLOQUER) ==================== -->
+    <div id="modal-garage" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+        <div class="hud-glass max-w-4xl w-full max-h-[92vh] overflow-y-auto rounded-3xl p-5 sm:p-6 border-2 border-purple-400/50 shadow-2xl">
+            <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-700">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-purple-600 flex items-center justify-center text-2xl">🏎️</div>
+                    <div>
+                        <h3 class="font-arcade font-black text-lg sm:text-xl text-white">GARAGE 3D DE MAXIME</h3>
+                        <p class="text-xs text-slate-300">Gagne des points en répondant aux questions ou en doublant les pilotes IA pour débloquer tous les véhicules !</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="px-3 py-1.5 rounded-xl bg-emerald-950 border border-emerald-400/50 font-arcade font-bold text-sm text-emerald-300">
+                        💰 Score : <span id="garage-score-display">0</span> PTS
+                    </div>
+                    <button onclick="unlockAllVehiclesParent()" class="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 border border-amber-400/50 text-xs font-bold cursor-pointer" title="Débloquer tous les véhicules gratuitement">
+                        🔓 Tout débloquer (Parent)
+                    </button>
+                    <button onclick="closeModal('modal-garage')" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Grille des 5 Véhicules 3D -->
+            <div id="garage-vehicles-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 my-4"></div>
+
+            <div class="flex justify-end pt-2">
+                <button onclick="closeModal('modal-garage')" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-400 to-emerald-400 text-slate-950 font-arcade font-bold text-sm cursor-pointer">
+                    🚗 Rouler avec ce véhicule !
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODALE 2 : PODIUM FIN DE COURSE IA ==================== -->
+    <div id="modal-podium" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="hud-glass max-w-lg w-full rounded-3xl p-6 sm:p-8 border-2 border-amber-400 text-center shadow-2xl">
+            <div id="podium-trophy" class="text-6xl mb-3">🏆</div>
+            <h2 id="podium-title" class="font-arcade font-black text-2xl sm:text-3xl text-yellow-300">COURSE TERMINÉE !</h2>
+            <p id="podium-summary" class="text-base sm:text-lg text-slate-200 my-4 font-semibold"></p>
+            <div class="flex flex-wrap items-center justify-center gap-3 mt-4">
+                <button onclick="closePodiumAndResumeQuiz()" class="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-500 text-slate-950 font-arcade font-bold text-sm sm:text-base shadow-xl cursor-pointer">
+                    📚 Continuer les Révisions
+                </button>
+                <button onclick="launchAIRaceNow()" class="px-5 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-arcade font-bold text-sm cursor-pointer">
+                    🔄 Refaire une Course IA
+                </button>
+                <button onclick="closePodiumAndResumeQuiz(); openModal('modal-garage');" class="px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm cursor-pointer">
+                    🏎️ Aller au Garage
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODALE 3 : CALIBRATION VOLANT LOGITECH USB ==================== -->
+    <div id="modal-wheel" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+        <div class="hud-glass max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl p-5 sm:p-6 border border-indigo-500/40 shadow-2xl">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-700">
+                <h3 class="font-arcade font-bold text-base sm:text-lg text-white">🛞 CALIBRATION VOLANT & PÉDALES USB</h3>
+                <button onclick="closeModal('modal-wheel')" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div id="gamepad-status-box" class="my-3 p-3 rounded-2xl bg-slate-900 border border-slate-700 text-xs sm:text-sm text-slate-200 font-semibold">
+                Branche ton volant Logitech en USB et tourne-le ou appuie sur une pédale pour le détecter.
+            </div>
+
+            <div id="raw-axes-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2 my-3"></div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 my-4">
+                <div class="p-3 rounded-2xl bg-slate-900 border border-slate-700">
+                    <label class="block text-xs text-cyan-300 font-bold mb-1">Axe Volant (Direction)</label>
+                    <select id="cfg-steer-axis" onchange="updateWheelConfig()" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-2.5 py-1.5 text-xs text-white mb-2">
+                        <option value="0" selected>Axe 0 (Standard Volant)</option>
+                        <option value="1">Axe 1</option>
+                        <option value="2">Axe 2</option>
+                    </select>
+                    <label class="block text-xs text-slate-400">Sensibilité : <span id="lbl-sens" class="text-cyan-300 font-bold">1.8x</span></label>
+                    <input type="range" id="cfg-steer-sens" min="0.8" max="4.0" step="0.1" value="1.8" oninput="updateWheelConfig()" class="w-full accent-cyan-400">
+                </div>
+
+                <div class="p-3 rounded-2xl bg-slate-900 border border-slate-700">
+                    <label class="block text-xs text-emerald-400 font-bold mb-1">Axe Accélérateur</label>
+                    <select id="cfg-gas-axis" onchange="updateWheelConfig()" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-2.5 py-1.5 text-xs text-white mb-2">
+                        <option value="-1">Désactivé (Auto)</option>
+                        <option value="1">Axe 1</option>
+                        <option value="2" selected>Axe 2 (Logitech G29/G27)</option>
+                        <option value="5">Axe 5</option>
+                    </select>
+                    <label class="flex items-center gap-2 text-xs text-slate-200 cursor-pointer">
+                        <input type="checkbox" id="cfg-gas-invert" checked onchange="updateWheelConfig()" class="rounded accent-emerald-400">
+                        <span>Inverser pédale (+1 → -1)</span>
+                    </label>
+                </div>
+
+                <div class="p-3 rounded-2xl bg-slate-900 border border-slate-700">
+                    <label class="block text-xs text-rose-400 font-bold mb-1">Axe Pédale Frein</label>
+                    <select id="cfg-brake-axis" onchange="updateWheelConfig()" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-2.5 py-1.5 text-xs text-white mb-2">
+                        <option value="-1">Désactivé</option>
+                        <option value="2">Axe 2</option>
+                        <option value="3">Axe 3</option>
+                        <option value="5" selected>Axe 5 (Logitech G29/G27)</option>
+                    </select>
+                    <label class="flex items-center gap-2 text-xs text-slate-200 cursor-pointer">
+                        <input type="checkbox" id="cfg-brake-invert" checked onchange="updateWheelConfig()" class="rounded accent-rose-400">
+                        <span>Inverser pédale (+1 → -1)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex justify-end">
+                <button onclick="closeModal('modal-wheel')" class="px-5 py-2 rounded-xl bg-indigo-500 text-slate-950 font-bold text-xs sm:text-sm cursor-pointer">
+                    Enregistrer & Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODALE 4 : PONT ARDUINO USB ==================== -->
+    <div id="modal-arduino" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+        <div class="hud-glass max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl p-5 sm:p-6 border border-emerald-500/40 shadow-2xl">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-700">
+                <h3 class="font-arcade font-bold text-base sm:text-lg text-white">🔌 PONT ARDUINO USB (WEB SERIAL)</h3>
+                <button onclick="closeModal('modal-arduino')" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="my-3 flex flex-wrap items-center justify-between gap-2">
+                <button onclick="connectArduinoSerial()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs sm:text-sm cursor-pointer">
+                    🔌 Choisir le port COM Arduino (9600 bauds)
+                </button>
+                <div class="flex gap-1.5">
+                    <button onclick="sendArduinoCommand('WIN\n')" class="px-3 py-1.5 rounded-lg bg-slate-800 text-emerald-300 text-xs border border-emerald-500/30 cursor-pointer">Tester WIN</button>
+                    <button onclick="sendArduinoCommand('FAIL\n')" class="px-3 py-1.5 rounded-lg bg-slate-800 text-rose-300 text-xs border border-rose-500/30 cursor-pointer">Tester FAIL</button>
+                    <button onclick="sendArduinoCommand('RACE\n')" class="px-3 py-1.5 rounded-lg bg-slate-800 text-amber-300 text-xs border border-amber-500/30 cursor-pointer">Tester RACE</button>
+                </div>
+            </div>
+
+            <div id="serial-log" class="h-28 rounded-xl bg-slate-950 border border-slate-800 p-2.5 font-mono text-xs text-emerald-300 overflow-y-auto mb-3">
+                <div>// Prêt. Le jeu envoie WIN, FAIL, BOOST, RACE et SIREN à l'Arduino.</div>
+            </div>
+
+            <pre id="arduino-sketch-code" class="h-36 rounded-xl bg-slate-950 border border-slate-800 p-3 font-mono text-[11px] text-slate-300 overflow-y-auto select-all">void setup() {
+  Serial.begin(9600);
+  pinMode(13, OUTPUT); // LED Verte / Gyrophare
+  pinMode(8, OUTPUT);  // Buzzer
+}
+void loop() {
+  if (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd == "WIN" || cmd == "RACE") {
+      digitalWrite(13, HIGH); tone(8, 1400, 200);
+    } else if (cmd == "FAIL") {
+      digitalWrite(13, LOW); tone(8, 220, 350);
+    }
+  }
+}</pre>
+        </div>
+    </div>
+
+    <!-- ==================== MODALE 5 : ÉDITEUR DE DEVOIRS ==================== -->
+    <div id="modal-homework" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+        <div class="hud-glass max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl p-5 sm:p-6 border border-amber-500/40 shadow-2xl">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-700">
+                <h3 class="font-arcade font-bold text-base sm:text-lg text-white">✏️ ÉDITEUR DE DEVOIRS DE MAXIME</h3>
+                <button onclick="closeModal('modal-homework')" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="my-3 p-3.5 rounded-2xl bg-slate-900 border border-slate-700 space-y-2.5">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Matière</label>
+                        <select id="hw-cat" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-2.5 py-2 text-xs text-white">
+                            <option value="MATHS">Maths</option>
+                            <option value="FRANÇAIS">Français</option>
+                            <option value="ANGLAIS">Anglais</option>
+                            <option value="DÉCOUVERTE">Découverte</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs text-slate-400 mb-1">Question</label>
+                        <input id="hw-q" type="text" placeholder="Ex: 8 × 7 = ?" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-xs text-white">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-xs text-emerald-400 font-bold mb-1">✅ Bonne réponse</label>
+                        <input id="hw-good" type="text" placeholder="Ex: 56" class="w-full bg-slate-800 border border-emerald-500 rounded-xl px-3 py-2 text-xs text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-rose-400 mb-1">❌ Piège 1</label>
+                        <input id="hw-bad1" type="text" placeholder="Ex: 54" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-xs text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-rose-400 mb-1">❌ Piège 2</label>
+                        <input id="hw-bad2" type="text" placeholder="Ex: 64" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-xs text-white">
+                    </div>
+                </div>
+                <div class="flex items-center justify-between pt-1">
+                    <span id="hw-status-msg" class="text-xs text-emerald-400 font-semibold"></span>
+                    <button onclick="addCustomQuestion()" class="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs cursor-pointer">
+                        ➕ Ajouter la question
+                    </button>
+                </div>
+            </div>
+
+            <div id="hw-list" class="max-h-44 overflow-y-auto space-y-1.5 pr-1"></div>
+        </div>
+    </div>
+
+    <!-- ==================== SCRIPT PRINCIPAL ==================== -->
+    <script>
+        /***********************************************************************
+         * 1. BANQUE DE QUESTIONS (MATHS, FRANÇAIS, ANGLAIS, DÉCOUVERTE)
+         ***********************************************************************/
+        const DEFAULT_QUESTIONS = [
+            { cat: 'MATHS', q: '7 × 8 = ?', good: '56', bad: ['54', '64'], exp: '7 × 8 = 56 ! Astuce : 5 - 6 - 7 - 8.' },
+            { cat: 'MATHS', q: '6 × 9 = ?', good: '54', bad: ['56', '63'], exp: '6 × 9 = 54 !' },
+            { cat: 'MATHS', q: '8 × 8 = ?', good: '64', bad: ['56', '72'], exp: '8 × 8 = 64 !' },
+            { cat: 'MATHS', q: '9 × 7 = ?', good: '63', bad: ['56', '72'], exp: '9 × 7 = 63 !' },
+            { cat: 'MATHS', q: '6 × 7 = ?', good: '42', bad: ['36', '48'], exp: '6 × 7 = 42 !' },
+            { cat: 'MATHS', q: 'Complément à 100 : 35 + ? = 100', good: '65', bad: ['75', '55'], exp: '35 + 65 = 100 !' },
+            { cat: 'MATHS', q: 'Quel est le double de 38 ?', good: '76', bad: ['66', '78'], exp: '38 + 38 = 76 !' },
+            { cat: 'MATHS', q: 'Quelle est la moitié de 90 ?', good: '45', bad: ['40', '50'], exp: 'La moitié de 90 est 45.' },
+            { cat: 'FRANÇAIS', q: 'Les enfants ___ dans le jardin.', good: 'jouent', bad: ['joue', 'joues'], exp: 'Avec "Les enfants" (pluriel), le verbe prend -ent !' },
+            { cat: 'FRANÇAIS', q: 'Il ___ mangé toute sa soupe.', good: 'a', bad: ['à', 'as'], exp: 'Verbe avoir : on peut dire "Il avait mangé".' },
+            { cat: 'FRANÇAIS', q: 'Les pilotes ___ prêts sur la ligne !', good: 'sont', bad: ['son', 'sons'], exp: 'Verbe être : "Les pilotes étaient prêts".' },
+            { cat: 'FRANÇAIS', q: 'Demain, tu ___ la course !', good: 'gagneras', bad: ['gagnera', 'gagnes'], exp: 'Au futur avec "tu", il y a toujours un S à la fin !' },
+            { cat: 'FRANÇAIS', q: 'Pluriel de « un cheval » ?', good: 'des chevaux', bad: ['des chevals', 'des chevaus'], exp: 'Un cheval -> des chevaux !' },
+            { cat: 'FRANÇAIS', q: 'Des hiboux, des genoux, des ___', good: 'cailloux', bad: ['caillous', 'caillouxes'], exp: 'Caillou prend un X au pluriel !' },
+            { cat: 'ANGLAIS', q: 'Comment dit-on « Voiture rouge » ?', good: 'Red car', bad: ['Blue car', 'Red cat'], exp: 'Red = Rouge, Car = Voiture !' },
+            { cat: 'DÉCOUVERTE', q: 'Quelle est la « Planète Rouge » ?', good: 'Mars', bad: ['Vénus', 'Jupiter'], exp: 'Mars est surnommée la Planète Rouge !' }
+        ];
+
+        const SUBJECT_LIST = ['TOUTES', 'MATHS', 'FRANÇAIS', 'ANGLAIS', 'DÉCOUVERTE'];
+        let subjectIndex = 0;
+        let questionsBank = [];
+        let activeQuestion = null;
+
+        function loadQuestionsBank() {
+            try {
+                const saved = localStorage.getItem('autoroute_maxime_questions_v3');
+                questionsBank = saved ? JSON.parse(saved) : [...DEFAULT_QUESTIONS];
+                if (!Array.isArray(questionsBank) || questionsBank.length === 0) {
+                    questionsBank = [...DEFAULT_QUESTIONS];
+                }
+            } catch (e) {
+                questionsBank = [...DEFAULT_QUESTIONS];
+            }
+            renderHomeworkList();
+        }
+
+        function saveQuestionsBank() {
+            try {
+                localStorage.setItem('autoroute_maxime_questions_v3', JSON.stringify(questionsBank));
+            } catch (e) {}
+            renderHomeworkList();
+        }
+
+        /***********************************************************************
+         * 2. GARAGE 3D : 5 VÉHICULES À DÉBLOQUER (SAUVEGARDÉS EN LOCALSTORAGE)
+         ***********************************************************************/
+        const VEHICLES_CATALOG = [
+            {
+                id: 'supercar',
+                name: 'Supercar Éclair',
+                icon: '🏎️',
+                cost: 0,
+                desc: 'Coupé sport rouge et bleu avec aileron carbone et double turbo.',
+                hasEmergencyLights: false
+            },
+            {
+                id: 'pompier',
+                name: 'Camion de Pompier',
+                icon: '🚒',
+                cost: 400,
+                desc: 'Camion d’intervention rouge vif avec grande échelle jaune et sirène Pin-Pon !',
+                hasEmergencyLights: true
+            },
+            {
+                id: 'police',
+                name: 'Interceptor Police',
+                icon: '🚓',
+                cost: 800,
+                desc: 'Bolide d’intervention Noir & Blanc avec rampe gyrophare Rouge/Bleu.',
+                hasEmergencyLights: true
+            },
+            {
+                id: 'f1',
+                name: 'Formule 1 Or & Cyan',
+                icon: '🏁',
+                cost: 1200,
+                desc: 'Monoplace de Grand Prix à roues découvertes et direction ultra-rapide.',
+                hasEmergencyLights: false
+            },
+            {
+                id: 'cyber',
+                name: 'Cyber-Bolide Néon',
+                icon: '🚀',
+                cost: 2000,
+                desc: 'Prototype futuriste Synthwave avec réacteur plasma violet et cyan.',
+                hasEmergencyLights: false
+            }
+        ];
+
+        let unlockedVehicles = ['supercar'];
+        let selectedVehicleId = 'supercar';
+        let emergencyLightsMeshes = []; // Gyrophares animés en 3D
+        let sirenActive = false;
+        let sirenInterval = null;
+
+        function loadGarageProgress() {
+            try {
+                const savedScore = parseInt(localStorage.getItem('autoroute_maxime_score'), 10);
+                if (!isNaN(savedScore) && savedScore > 0) gameState.score = savedScore;
+
+                const savedUnlocked = JSON.parse(localStorage.getItem('autoroute_maxime_unlocked'));
+                if (Array.isArray(savedUnlocked) && savedUnlocked.length > 0) {
+                    unlockedVehicles = savedUnlocked;
+                }
+                const savedVeh = localStorage.getItem('autoroute_maxime_vehicle');
+                if (savedVeh && unlockedVehicles.includes(savedVeh)) {
+                    selectedVehicleId = savedVeh;
+                }
+            } catch (e) {}
+            updateScoreUI();
+        }
+
+        function saveGarageProgress() {
+            try {
+                localStorage.setItem('autoroute_maxime_score', String(gameState.score));
+                localStorage.setItem('autoroute_maxime_unlocked', JSON.stringify(unlockedVehicles));
+                localStorage.setItem('autoroute_maxime_vehicle', selectedVehicleId);
+            } catch (e) {}
+        }
+
+        function renderGarageModal() {
+            document.getElementById('garage-score-display').textContent = gameState.score;
+            const grid = document.getElementById('garage-vehicles-grid');
+            if (!grid) return;
+
+            grid.innerHTML = VEHICLES_CATALOG.map(v => {
+                const isUnlocked = unlockedVehicles.includes(v.id);
+                const isSelected = selectedVehicleId === v.id;
+                const canAfford = gameState.score >= v.cost;
+
+                let btnHtml = '';
+                if (isSelected) {
+                    btnHtml = `<button class="w-full py-2 rounded-xl bg-emerald-500 text-slate-950 font-arcade font-bold text-xs cursor-default">✅ VÉHICULE CHOISI</button>`;
+                } else if (isUnlocked) {
+                    btnHtml = `<button onclick="chooseVehicle('${v.id}')" class="w-full py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-arcade font-bold text-xs cursor-pointer">🚗 Choisir ce bolide</button>`;
+                } else {
+                    btnHtml = `<button onclick="buyVehicle('${v.id}')" class="w-full py-2 rounded-xl ${canAfford ? 'bg-amber-400 hover:bg-amber-300 text-slate-950' : 'bg-slate-800 text-slate-400'} font-arcade font-bold text-xs cursor-pointer">🔓 Débloquer (${v.cost} pts)</button>`;
+                }
+
+                return `
+                    <div class="p-4 rounded-2xl bg-slate-900/95 border-2 ${isSelected ? 'border-emerald-400 shadow-lg shadow-emerald-500/20' : (isUnlocked ? 'border-slate-700' : 'border-slate-800 opacity-90')} flex flex-col justify-between gap-3">
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-3xl">${v.icon}</span>
+                                <span class="text-xs font-arcade font-bold px-2.5 py-0.5 rounded-full ${isUnlocked ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}">
+                                    ${isUnlocked ? 'DÉBLOQUÉ' : v.cost + ' PTS'}
+                                </span>
+                            </div>
+                            <h4 class="font-arcade font-bold text-base text-white mt-1">${v.name}</h4>
+                            <p class="text-xs text-slate-300 mt-1">${v.desc}</p>
+                        </div>
+                        ${btnHtml}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function buyVehicle(vehId) {
+            const v = VEHICLES_CATALOG.find(item => item.id === vehId);
+            if (!v) return;
+            if (gameState.score < v.cost) {
+                showCenterToast(`Il te manque ${v.cost - gameState.score} points pour ${v.name} !`, ' c-amber');
+                playSoundEffect('fail');
+                return;
+            }
+            gameState.score -= v.cost;
+            if (!unlockedVehicles.includes(vehId)) unlockedVehicles.push(vehId);
+            selectedVehicleId = vehId;
+            saveGarageProgress();
+            updateScoreUI();
+            buildPlayerCar(selectedVehicleId);
+            renderGarageModal();
+            playSoundEffect('win');
+            showCenterToast(`🎉 ${v.icon} ${v.name} débloqué !`, 'c-green');
+        }
+
+        function chooseVehicle(vehId) {
+            if (!unlockedVehicles.includes(vehId)) return;
+            selectedVehicleId = vehId;
+            saveGarageProgress();
+            buildPlayerCar(selectedVehicleId);
+            renderGarageModal();
+            playSoundEffect('boost');
+        }
+
+        function unlockAllVehiclesParent() {
+            VEHICLES_CATALOG.forEach(v => {
+                if (!unlockedVehicles.includes(v.id)) unlockedVehicles.push(v.id);
+            });
+            saveGarageProgress();
+            renderGarageModal();
+            playSoundEffect('win');
+            showCenterToast('🔓 Tous les véhicules du Garage sont débloqués !', 'c-green');
+        }
+
+        /***********************************************************************
+         * 3. AUDIO ENGINE (MOTEUR + SIRÈNE PIN-PON + VOIX FRANÇAISE)
+         ***********************************************************************/
+        let ttsEnabled = true;
+        let audioCtx = null;
+
+        function ensureAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playSoundEffect(type) {
+            try {
+                ensureAudio();
+                if (!audioCtx) return;
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'win') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523.25, now);
+                    osc.frequency.setValueAtTime(659.25, now + 0.08);
+                    osc.frequency.setValueAtTime(783.99, now + 0.16);
+                    osc.frequency.setValueAtTime(1046.5, now + 0.25);
+                    gain.gain.setValueAtTime(0.18, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                    osc.start(now);
+                    osc.stop(now + 0.5);
+                } else if (type === 'fail') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(210, now);
+                    osc.frequency.linearRampToValueAtTime(120, now + 0.32);
+                    gain.gain.setValueAtTime(0.16, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+                    osc.start(now);
+                    osc.stop(now + 0.36);
+                } else if (type === 'boost') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(220, now);
+                    osc.frequency.exponentialRampToValueAtTime(740, now + 0.35);
+                    gain.gain.setValueAtTime(0.16, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+                    osc.start(now);
+                    osc.stop(now + 0.38);
+                } else if (type === 'beep') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(440, now);
+                    gain.gain.setValueAtTime(0.18, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+                    osc.start(now);
+                    osc.stop(now + 0.22);
+                } else if (type === 'go') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(880, now);
+                    gain.gain.setValueAtTime(0.24, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+                    osc.start(now);
+                    osc.stop(now + 0.45);
+                }
+            } catch (e) {}
+        }
+
+        function toggleSiren() {
+            sirenActive = !sirenActive;
+            const btn = document.getElementById('btn-siren');
+            if (sirenActive) {
+                btn.classList.add('bg-rose-600', 'text-white');
+                sendArduinoCommand('SIREN\n');
+                let highTone = true;
+                playSirenTone(highTone);
+                sirenInterval = setInterval(() => {
+                    if (!sirenActive) return;
+                    highTone = !highTone;
+                    playSirenTone(highTone);
+                }, 420);
+            } else {
+                btn.classList.remove('bg-rose-600', 'text-white');
+                if (sirenInterval) clearInterval(sirenInterval);
+            }
+        }
+
+        function playSirenTone(isPin) {
+            try {
+                ensureAudio();
+                if (!audioCtx) return;
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(isPin ? 435 : 580, now); // Vrai Pin-Pon français !
+                gain.gain.setValueAtTime(0.09, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.38);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.39);
+            } catch (e) {}
+        }
+
+        function speakText(text) {
+            if (!ttsEnabled || !('speechSynthesis' in window)) return;
+            try {
+                window.speechSynthesis.cancel();
+                const clean = String(text).replace(/___/g, ' , trou , ').replace(/×/g, ' fois ');
+                const u = new SpeechSynthesisUtterance(clean);
+                u.lang = 'fr-FR';
+                u.rate = 1.03;
+                window.speechSynthesis.speak(u);
+            } catch (e) {}
+        }
+
+        function speakCurrentQuestion() {
+            if (activeQuestion) {
+                const prev = ttsEnabled;
+                ttsEnabled = true;
+                speakText(activeQuestion.q);
+                ttsEnabled = prev;
+            }
+        }
+
+        function toggleTTS() {
+            ttsEnabled = !ttsEnabled;
+            document.getElementById('icon-tts').className = ttsEnabled
+                ? 'fa-solid fa-volume-high text-cyan-300'
+                : 'fa-solid fa-volume-xmark text-slate-500';
+        }
+
+        /***********************************************************************
+         * 4. SYSTÈME DE CONTRÔLES (CLAVIER + BOUTONS A/B/C + VOLANT LOGITECH USB)
+         ***********************************************************************/
+        const LANE_WIDTH = 5.0;
+        const LANE_X = [-LANE_WIDTH, 0, LANE_WIDTH]; // File A (-5), File B (0), File C (+5)
+        const LANE_LETTERS = ['A', 'B', 'C'];
+
+        const inputState = {
+            left: false,
+            right: false,
+            up: false,
+            down: false,
+            usingWheel: false,
+            targetLaneIdx: 1, // 0 = A, 1 = B, 2 = C
+            steer: 0,
+            gas: 0.6,
+            brake: 0,
+            steerAxis: 0,
+            steerSensitivity: 1.8,
+            gasAxis: 2,
+            gasInvert: true,
+            brakeAxis: 5,
+            brakeInvert: true,
+            cruiseControl: true
+        };
+
+        function selectLaneByClick(laneIdx) {
+            ensureAudio();
+            inputState.usingWheel = false;
+            inputState.targetLaneIdx = Math.max(0, Math.min(2, laneIdx));
+            updateLaneCardsHighlight(inputState.targetLaneIdx);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            ensureAudio();
+            if (e.code === 'ArrowLeft' || e.code === 'KeyQ') {
+                inputState.usingWheel = false;
+                inputState.targetLaneIdx = Math.max(0, inputState.targetLaneIdx - 1);
+            } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+                inputState.usingWheel = false;
+                inputState.targetLaneIdx = Math.min(2, inputState.targetLaneIdx + 1);
+            } else if (e.key === 'a' || e.key === 'A' || e.key === '1') {
+                selectLaneByClick(0);
+            } else if (e.key === 'b' || e.key === 'B' || e.key === '2') {
+                selectLaneByClick(1);
+            } else if (e.key === 'c' || e.key === 'C' || e.key === '3') {
+                selectLaneByClick(2);
+            } else if (e.code === 'ArrowUp' || e.code === 'KeyZ' || e.code === 'KeyW') {
+                inputState.up = true;
+            } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+                inputState.down = true;
+            } else if (e.code === 'Space') {
+                triggerManualBoost();
+            } else if (e.code === 'KeyR') {
+                launchAIRaceNow();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'ArrowUp' || e.code === 'KeyZ' || e.code === 'KeyW') inputState.up = false;
+            if (e.code === 'ArrowDown' || e.code === 'KeyS') inputState.down = false;
+        });
+
+        function updateWheelConfig() {
+            inputState.steerAxis = parseInt(document.getElementById('cfg-steer-axis').value, 10) || 0;
+            inputState.steerSensitivity = parseFloat(document.getElementById('cfg-steer-sens').value) || 1.8;
+            document.getElementById('lbl-sens').textContent = inputState.steerSensitivity.toFixed(1) + 'x';
+            inputState.gasAxis = parseInt(document.getElementById('cfg-gas-axis').value, 10);
+            inputState.gasInvert = document.getElementById('cfg-gas-invert').checked;
+            inputState.brakeAxis = parseInt(document.getElementById('cfg-brake-axis').value, 10);
+            inputState.brakeInvert = document.getElementById('cfg-brake-invert').checked;
+        }
+
+        function toggleCruiseMode(val) {
+            inputState.cruiseControl = val;
+        }
+
+        function readPedalNorm(raw, invert) {
+            if (typeof raw !== 'number' || isNaN(raw)) return 0;
+            const v = invert ? (1 - raw) * 0.5 : (raw + 1) * 0.5;
+            return Math.max(0, Math.min(1, v));
+        }
+
+        function pollGamepadInputs() {
+            if (!navigator.getGamepads) return;
+            const pads = navigator.getGamepads();
+            let gp = null;
+            for (let i = 0; i < pads.length; i++) {
+                if (pads[i] && pads[i].connected) { gp = pads[i]; break; }
+            }
+
+            if (gp) {
+                document.getElementById('badge-wheel-text').textContent = 'Volant ON';
+                const statusBox = document.getElementById('gamepad-status-box');
+                if (statusBox) statusBox.textContent = `✅ Volant détecté : ${gp.id}`;
+
+                const modalWheel = document.getElementById('modal-wheel');
+                if (modalWheel && !modalWheel.classList.contains('hidden')) {
+                    const grid = document.getElementById('raw-axes-grid');
+                    if (grid) {
+                        grid.innerHTML = gp.axes.slice(0, 6).map((val, idx) => `
+                            <div class="p-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono">
+                                <div class="flex justify-between"><span>Axe ${idx}</span><span class="text-cyan-300">${val.toFixed(2)}</span></div>
+                            </div>
+                        `).join('');
+                    }
+                }
+
+                const rawSteer = gp.axes[inputState.steerAxis] || 0;
+                if (Math.abs(rawSteer) > 0.04 || inputState.usingWheel) {
+                    inputState.usingWheel = true;
+                    inputState.steer = Math.max(-1, Math.min(1, rawSteer * inputState.steerSensitivity));
+                }
+
+                let gas = 0;
+                if (inputState.gasAxis >= 0 && gp.axes[inputState.gasAxis] !== undefined) {
+                    gas = readPedalNorm(gp.axes[inputState.gasAxis], inputState.gasInvert);
+                }
+                if (inputState.up) gas = 1;
+                if (inputState.cruiseControl) gas = Math.max(0.55, gas);
+                inputState.gas = gas;
+
+                let brake = 0;
+                if (inputState.brakeAxis >= 0 && gp.axes[inputState.brakeAxis] !== undefined) {
+                    brake = readPedalNorm(gp.axes[inputState.brakeAxis], inputState.brakeInvert);
+                }
+                if (inputState.down) brake = 1;
+                inputState.brake = brake;
+
+                if (gp.buttons[0]?.pressed || gp.buttons[1]?.pressed || gp.buttons[4]?.pressed) {
+                    triggerManualBoost();
+                }
+            } else {
+                inputState.gas = inputState.up ? 1.0 : (inputState.cruiseControl ? 0.6 : 0.0);
+                inputState.brake = inputState.down ? 1.0 : 0.0;
+            }
+
+            // Mise à jour télémétrie HUD
+            const steerDeg = Math.round((inputState.usingWheel ? inputState.steer : (inputState.targetLaneIdx - 1) * 0.65) * 95);
+            document.getElementById('hud-wheel-svg').style.transform = `rotate(${steerDeg}deg)`;
+            document.getElementById('hud-steer-val').textContent = `${steerDeg}°`;
+            document.getElementById('hud-gas-bar').style.height = `${Math.round(inputState.gas * 100)}%`;
+            document.getElementById('hud-brake-bar').style.height = `${Math.round(inputState.brake * 100)}%`;
+        }
+
+        /***********************************************************************
+         * 5. SCÈNE 3D THREE.JS : ROUTE, PORTAILS A/B/C, GARAGE & PILOTES IA
+         ***********************************************************************/
+        let scene, camera, renderer;
+        let carGroup = null;
+        let roadDashes = [];
+        let roadsidePillars = [];
+        let portalGroup = null;
+        let aiCarsGroup = null;
+        let boostPadsGroup = null;
+        let particles = [];
+
+        const gameState = {
+            mode: 'QUIZ', // 'QUIZ' | 'RACE'
+            paused: false,
+            score: 0,
+            streak: 0,
+            questionsUntilRace: 0,
+            targetQuestionsForRace: 10,
+            speedKmh: 115,
+            carX: 0,
+            currentLaneIndex: 1,
+            boostTimer: 0,
+            slowTimer: 0,
+            portalZ: -135,
+            laneChoices: [],
+            // Mode Course IA
+            raceTimeLeft: 45,
+            raceOvertakes: 0,
+            raceRank: 6,
+            raceStartingFreeze: false
+        };
+
+        function initThreeScene() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x070b14);
+            scene.fog = new THREE.FogExp2(0x070b14, 0.0075);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 260);
+            camera.position.set(0, 4.8, 10.5);
+            camera.lookAt(0, 1.3, -20);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+            const dirLight = new THREE.DirectionalLight(0x38bdf8, 1.1);
+            dirLight.position.set(15, 30, 20);
+            scene.add(dirLight);
+
+            // Soleil Synthwave à l'horizon
+            const sunMesh = new THREE.Mesh(
+                new THREE.CircleGeometry(30, 32),
+                new THREE.MeshBasicMaterial({ color: 0xff007f, fog: false })
+            );
+            sunMesh.position.set(0, 20, -195);
+            scene.add(sunMesh);
+
+            buildHighway3D();
+            buildPlayerCar(selectedVehicleId);
+
+            portalGroup = new THREE.Group();
+            scene.add(portalGroup);
+
+            aiCarsGroup = new THREE.Group();
+            scene.add(aiCarsGroup);
+
+            boostPadsGroup = new THREE.Group();
+            scene.add(boostPadsGroup);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        function buildHighway3D() {
+            const ground = new THREE.Mesh(
+                new THREE.PlaneGeometry(320, 320),
+                new THREE.MeshLambertMaterial({ color: 0x0b0720 })
+            );
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -0.05;
+            scene.add(ground);
+
+            const roadWidth = LANE_WIDTH * 3 + 1.2; // 16.2m
+            const road = new THREE.Mesh(
+                new THREE.PlaneGeometry(roadWidth, 300),
+                new THREE.MeshPhongMaterial({ color: 0x1e293b, shininess: 20 })
+            );
+            road.rotation.x = -Math.PI / 2;
+            road.position.z = -120;
+            scene.add(road);
+
+            // Rails lumineux latéraux
+            const railGeo = new THREE.BoxGeometry(0.32, 0.4, 300);
+            const leftRail = new THREE.Mesh(railGeo, new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+            leftRail.position.set(-roadWidth / 2, 0.2, -120);
+            scene.add(leftRail);
+
+            const rightRail = new THREE.Mesh(railGeo, new THREE.MeshBasicMaterial({ color: 0xf59e0b }));
+            rightRail.position.set(roadWidth / 2, 0.2, -120);
+            scene.add(rightRail);
+
+            // Pointillés entre File A / File B et File B / File C
+            const dashGeo = new THREE.PlaneGeometry(0.24, 4.2);
+            const dashMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+            for (let z = 12; z > -220; z -= 10) {
+                [-LANE_WIDTH / 2, LANE_WIDTH / 2].forEach(xPos => {
+                    const d = new THREE.Mesh(dashGeo, dashMat);
+                    d.rotation.x = -Math.PI / 2;
+                    d.position.set(xPos, 0.02, z);
+                    scene.add(d);
+                    roadDashes.push(d);
+                });
+            }
+
+            // Piliers néon sur les côtés
+            const pGeo = new THREE.BoxGeometry(0.5, 6.5, 0.5);
+            const pMatL = new THREE.MeshBasicMaterial({ color: 0xec4899 });
+            const pMatR = new THREE.MeshBasicMaterial({ color: 0x00f2fe });
+            for (let z = 0; z > -220; z -= 18) {
+                const pL = new THREE.Mesh(pGeo, pMatL);
+                pL.position.set(-roadWidth / 2 - 2.4, 3.25, z);
+                scene.add(pL);
+                roadsidePillars.push(pL);
+
+                const pR = new THREE.Mesh(pGeo, pMatR);
+                pR.position.set(roadWidth / 2 + 2.4, 3.25, z);
+                scene.add(pR);
+                roadsidePillars.push(pR);
+            }
+        }
+
+        // Construction dynamique des 5 Véhicules du Garage en 3D !
+        function buildPlayerCar(vehicleId) {
+            if (carGroup) {
+                scene.remove(carGroup);
+            }
+            carGroup = new THREE.Group();
+            emergencyLightsMeshes = [];
+
+            const vInfo = VEHICLES_CATALOG.find(v => v.id === vehicleId) || VEHICLES_CATALOG[0];
+            const hudName = document.getElementById('hud-vehicle-name');
+            if (hudName) hudName.textContent = `${vInfo.icon} ${vInfo.name}`;
+
+            // Roues communes
+            const wheelGeo = new THREE.CylinderGeometry(0.44, 0.44, 0.38, 16);
+            wheelGeo.rotateZ(Math.PI / 2);
+            const wheelMat = new THREE.MeshLambertMaterial({ color: 0x111827 });
+            [[-1.15, -1.35], [1.15, -1.35], [-1.15, 1.35], [1.15, 1.35]].forEach(([wx, wz]) => {
+                const w = new THREE.Mesh(wheelGeo, wheelMat);
+                w.position.set(wx, 0.44, wz);
+                carGroup.add(w);
+            });
+
+            if (vehicleId === 'pompier') {
+                // 🚒 CAMION DE POMPIER AVEC GRANDE ÉCHELLE ET GYROPHARES BLEUS
+                const body = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.35, 1.25, 4.7),
+                    new THREE.MeshPhongMaterial({ color: 0xdc2626, shininess: 70 })
+                );
+                body.position.y = 1.0;
+                carGroup.add(body);
+
+                // Bande blanche latérale
+                const stripe = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.39, 0.24, 4.72),
+                    new THREE.MeshBasicMaterial({ color: 0xffffff })
+                );
+                stripe.position.y = 0.85;
+                carGroup.add(stripe);
+
+                // Grande échelle jaune sur le toit
+                const ladderRailGeo = new THREE.BoxGeometry(0.14, 0.14, 4.2);
+                const ladderMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+                const railL = new THREE.Mesh(ladderRailGeo, ladderMat);
+                railL.position.set(-0.4, 1.75, 0.1);
+                const railR = railL.clone();
+                railR.position.x = 0.4;
+                carGroup.add(railL, railR);
+
+                for (let z = -1.7; z <= 1.8; z += 0.5) {
+                    const rung = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 0.1), ladderMat);
+                    rung.position.set(0, 1.75, z);
+                    carGroup.add(rung);
+                }
+
+                // Gyrophares bleus sur la cabine
+                const gyroL = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.25, 0.3), new THREE.MeshBasicMaterial({ color: 0x00f2fe }));
+                gyroL.position.set(-0.65, 1.75, -1.8);
+                const gyroR = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.25, 0.3), new THREE.MeshBasicMaterial({ color: 0x3b82f6 }));
+                gyroR.position.set(0.65, 1.75, -1.8);
+                carGroup.add(gyroL, gyroR);
+                emergencyLightsMeshes.push(gyroL, gyroR);
+
+            } else if (vehicleId === 'police') {
+                // 🚓 INTERCEPTOR POLICE NOIR & BLANC + GYROPHARE ROUGE/BLEU
+                const body = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.15, 0.65, 4.3),
+                    new THREE.MeshPhongMaterial({ color: 0x111827, shininess: 100 })
+                );
+                body.position.y = 0.62;
+                carGroup.add(body);
+
+                // Portières et toit blancs
+                const cabin = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.75, 0.55, 2.1),
+                    new THREE.MeshPhongMaterial({ color: 0xf8fafc, shininess: 90 })
+                );
+                cabin.position.set(0, 1.15, -0.1);
+                carGroup.add(cabin);
+
+                // Rampe gyrophare Rouge / Bleu
+                const gyroRed = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.22, 0.28), new THREE.MeshBasicMaterial({ color: 0xff0044 }));
+                gyroRed.position.set(-0.35, 1.52, -0.1);
+                const gyroBlue = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.22, 0.28), new THREE.MeshBasicMaterial({ color: 0x00ccff }));
+                gyroBlue.position.set(0.35, 1.52, -0.1);
+                carGroup.add(gyroRed, gyroBlue);
+                emergencyLightsMeshes.push(gyroRed, gyroBlue);
+
+            } else if (vehicleId === 'f1') {
+                // 🏁 FORMULE 1 OR & CYAN
+                const fuselage = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.1, 0.48, 4.6),
+                    new THREE.MeshPhongMaterial({ color: 0xf59e0b, shininess: 110 })
+                );
+                fuselage.position.y = 0.5;
+                carGroup.add(fuselage);
+
+                const sidepods = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.05, 0.4, 2.2),
+                    new THREE.MeshPhongMaterial({ color: 0x06b6d4 })
+                );
+                sidepods.position.set(0, 0.48, 0.2);
+                carGroup.add(sidepods);
+
+                const frontWing = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.35, 0.12, 0.55),
+                    new THREE.MeshBasicMaterial({ color: 0x00f2fe })
+                );
+                frontWing.position.set(0, 0.3, -2.15);
+                carGroup.add(frontWing);
+
+                const rearWing = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.15, 0.25, 0.5),
+                    new THREE.MeshBasicMaterial({ color: 0x00f2fe })
+                );
+                rearWing.position.set(0, 1.05, 2.05);
+                carGroup.add(rearWing);
+
+            } else if (vehicleId === 'cyber') {
+                // 🚀 CYBER-BOLIDE NÉON SYNTHWAVE
+                const body = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.25, 0.58, 4.4),
+                    new THREE.MeshPhongMaterial({ color: 0x581c87, shininess: 120 })
+                );
+                body.position.y = 0.58;
+                carGroup.add(body);
+
+                const neonTrim = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.3, 0.12, 4.44),
+                    new THREE.MeshBasicMaterial({ color: 0x00f2fe })
+                );
+                neonTrim.position.y = 0.55;
+                carGroup.add(neonTrim);
+
+                const canopy = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.6, 0.48, 2.3),
+                    new THREE.MeshBasicMaterial({ color: 0xf472b6 })
+                );
+                canopy.position.set(0, 1.05, 0);
+                carGroup.add(canopy);
+
+            } else {
+                // 🏎️ SUPERCAR ÉCLAIR (PAR DÉFAUT)
+                const body = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.15, 0.62, 4.25),
+                    new THREE.MeshPhongMaterial({ color: 0xef4444, shininess: 100 })
+                );
+                body.position.y = 0.6;
+                carGroup.add(body);
+
+                const stripe = new THREE.Mesh(
+                    new THREE.PlaneGeometry(0.45, 4.26),
+                    new THREE.MeshBasicMaterial({ color: 0xfde047 })
+                );
+                stripe.rotation.x = -Math.PI / 2;
+                stripe.position.y = 0.92;
+                carGroup.add(stripe);
+
+                const cabin = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.7, 0.52, 2.0),
+                    new THREE.MeshPhongMaterial({ color: 0x0f172a, shininess: 120 })
+                );
+                cabin.position.set(0, 1.12, -0.15);
+                carGroup.add(cabin);
+
+                const wing = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.2, 0.12, 0.45),
+                    new THREE.MeshPhongMaterial({ color: 0x38bdf8 })
+                );
+                wing.position.set(0, 1.22, 1.85);
+                carGroup.add(wing);
+            }
+
+            // Flammes Nitro à l'arrière
+            const flameGeo = new THREE.ConeGeometry(0.28, 1.45, 10);
+            const flameMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe });
+            const flameL = new THREE.Mesh(flameGeo, flameMat);
+            flameL.rotation.x = Math.PI / 2;
+            flameL.position.set(-0.55, 0.48, 2.75);
+            flameL.visible = false;
+            const flameR = flameL.clone();
+            flameR.position.x = 0.55;
+            carGroup.add(flameL, flameR);
+            carGroup.userData.flames = [flameL, flameR];
+
+            carGroup.position.set(gameState.carX, 0, 2.2);
+            scene.add(carGroup);
+        }
+
+        /***********************************************************************
+         * 6. PORTAILS 3D & PANNEAUX GEANTS SUR LES FILES A / B / C
+         ***********************************************************************/
+        function createPortalTexture(laneLetter, answerText, borderColor) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 320;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, 512, 320);
+
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 18;
+            ctx.strokeRect(9, 9, 494, 302);
+
+            ctx.fillStyle = borderColor;
+            ctx.fillRect(16, 16, 480, 76);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '900 42px Orbitron, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`FILE ${laneLetter}`, 256, 55);
+
+            ctx.fillStyle = '#ffffff';
+            const str = String(answerText);
+            const fontSize = str.length > 12 ? 48 : (str.length > 7 ? 62 : 82);
+            ctx.font = `bold ${fontSize}px Fredoka, sans-serif`;
+            ctx.fillText(str, 256, 202);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.needsUpdate = true;
+            return tex;
+        }
+
+        function spawnNextQuestionPortal() {
+            while (portalGroup.children.length > 0) {
+                portalGroup.remove(portalGroup.children[0]);
+            }
+
+            const subj = SUBJECT_LIST[subjectIndex];
+            const pool = subj === 'TOUTES'
+                ? questionsBank
+                : questionsBank.filter(q => q.cat === subj);
+            const finalPool = pool.length > 0 ? pool : questionsBank;
+
+            let candidate = finalPool[Math.floor(Math.random() * finalPool.length)];
+            if (finalPool.length > 1 && activeQuestion && candidate.q === activeQuestion.q) {
+                candidate = finalPool[(finalPool.indexOf(candidate) + 1) % finalPool.length];
+            }
+            activeQuestion = candidate;
+
+            document.getElementById('q-category-badge').textContent = activeQuestion.cat;
+            document.getElementById('hud-question-text').textContent = activeQuestion.q;
+
+            const choices = [
+                { text: activeQuestion.good, isCorrect: true },
+                { text: activeQuestion.bad[0], isCorrect: false },
+                { text: activeQuestion.bad[1], isCorrect: false }
+            ].sort(() => Math.random() - 0.5);
+
+            gameState.laneChoices = choices;
+            const colors = ['#0284c7', '#7e22ce', '#d97706'];
+
+            choices.forEach((c, idx) => {
+                // Mettre à jour la grande carte HTML File A / B / C
+                document.getElementById(`ans-val-${idx}`).textContent = c.text;
+
+                // Panneau 3D au-dessus de la voie
+                const tex = createPortalTexture(LANE_LETTERS[idx], c.text, colors[idx]);
+                const signMesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(4.6, 2.85),
+                    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
+                );
+                signMesh.position.set(LANE_X[idx], 2.75, 0);
+                portalGroup.add(signMesh);
+
+                // Marquage géant directement peint au sol sur la File A / B / C
+                const floorMesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(4.4, 3.2),
+                    new THREE.MeshBasicMaterial({ map: tex })
+                );
+                floorMesh.rotation.x = -Math.PI / 2;
+                floorMesh.position.set(LANE_X[idx], 0.03, 5.2);
+                portalGroup.add(floorMesh);
+            });
+
+            gameState.portalZ = -135;
+            portalGroup.position.z = gameState.portalZ;
+            portalGroup.visible = (gameState.mode === 'QUIZ');
+
+            if (gameState.mode === 'QUIZ') {
+                speakText(activeQuestion.q);
+            }
+        }
+
+        function updateLaneCardsHighlight(activeIdx) {
+            for (let i = 0; i < 3; i++) {
+                const card = document.getElementById(`card-lane-${i}`);
+                const ind = document.getElementById(`ind-lane-${i}`);
+                if (!card || !ind) continue;
+                if (i === activeIdx) {
+                    card.classList.add('active-lane');
+                    ind.className = 'text-[11px] font-extrabold px-2.5 py-0.5 rounded-lg bg-emerald-400 text-slate-950';
+                    ind.textContent = `✅ VOITURE SUR FILE ${LANE_LETTERS[i]}`;
+                } else {
+                    card.classList.remove('active-lane');
+                    ind.className = 'text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-slate-800 text-slate-300';
+                    ind.textContent = `Aller sur File ${LANE_LETTERS[i]}`;
+                }
+            }
+        }
+
+        /***********************************************************************
+         * 7. MODE RÉCOMPENSE : LA COURSE LIBRE CONTRE LES 5 PILOTES IA
+         ***********************************************************************/
+        const AI_PILOTS_DATA = [
+            { name: 'Turbo Léo', color: 0x38bdf8, speedKmh: 112 },
+            { name: 'Nitro Zoé', color: 0xa855f7, speedKmh: 120 },
+            { name: 'Flash Rex', color: 0xf59e0b, speedKmh: 128 },
+            { name: 'Cyber Tom', color: 0x10b981, speedKmh: 135 },
+            { name: 'Vortex Mia', color: 0xec4899, speedKmh: 142 }
+        ];
+        let aiPilots = [];
+        let boostPads = [];
+        let raceTimerInterval = null;
+
+        function createAIPilotMesh(pilotSpec) {
+            const group = new THREE.Group();
+
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(2.1, 0.65, 4.1),
+                new THREE.MeshPhongMaterial({ color: pilotSpec.color, shininess: 90 })
+            );
+            body.position.y = 0.6;
+            group.add(body);
+
+            const cabin = new THREE.Mesh(
+                new THREE.BoxGeometry(1.65, 0.5, 1.9),
+                new THREE.MeshPhongMaterial({ color: 0x0f172a })
+            );
+            cabin.position.set(0, 1.1, -0.1);
+            group.add(cabin);
+
+            // Étiquette flottante au-dessus de la voiture IA avec le nom du pilote
+            const c = document.createElement('canvas');
+            c.width = 256;
+            c.height = 64;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+            ctx.fillRect(0, 0, 256, 64);
+            ctx.strokeStyle = '#fde047';
+            ctx.lineWidth = 6;
+            ctx.strokeRect(3, 3, 250, 58);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 28px Fredoka, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🏎️ ' + pilotSpec.name, 128, 33);
+
+            const labelTex = new THREE.CanvasTexture(c);
+            const labelMesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(3.2, 0.8),
+                new THREE.MeshBasicMaterial({ map: labelTex, transparent: true })
+            );
+            labelMesh.position.set(0, 2.3, 0);
+            group.add(labelMesh);
+
+            return group;
+        }
+
+        // Fonction appelée par le bouton "🏁 LANCER LA COURSE IA", par la jauge 10/10 ou automatiquement
+        function launchAIRaceNow() {
+            ensureAudio();
+            // Fermer toutes les modales éventuellement ouvertes
+            document.querySelectorAll('[id^="modal-"]').forEach(m => m.classList.add('hidden'));
+
+            gameState.paused = false;
+            gameState.mode = 'RACE';
+            gameState.raceTimeLeft = 45;
+            gameState.raceOvertakes = 0;
+            gameState.raceRank = 6;
+            gameState.boostTimer = 2.0;
+
+            // Basculer l'affichage HUD en mode Course IA
+            document.getElementById('quiz-question-banner').classList.add('hidden');
+            document.getElementById('lanes-answers-overlay').classList.add('hidden');
+            document.getElementById('race-hud-banner').classList.remove('hidden');
+            document.getElementById('race-timer-val').textContent = '45s';
+            document.getElementById('race-overtakes-val').textContent = '0';
+            document.getElementById('race-rank-val').textContent = '6e / 6';
+
+            if (portalGroup) portalGroup.visible = false;
+
+            // Placer les 5 Pilotes IA juste devant Maxime (z = -16 à -76) pour qu'il les voie tout de suite !
+            while (aiCarsGroup.children.length > 0) aiCarsGroup.remove(aiCarsGroup.children[0]);
+            aiPilots = AI_PILOTS_DATA.map((spec, idx) => {
+                const mesh = createAIPilotMesh(spec);
+                const startLane = idx % 3;
+                const startZ = -16 - (idx * 15);
+                mesh.position.set(LANE_X[startLane], 0, startZ);
+                aiCarsGroup.add(mesh);
+                return {
+                    mesh,
+                    name: spec.name,
+                    lane: startLane,
+                    targetX: LANE_X[startLane],
+                    speedKmh: spec.speedKmh,
+                    relZ: startZ,
+                    passed: false,
+                    laneTimer: 1.5 + Math.random() * 2.0
+                };
+            });
+
+            // Placer les plaques Turbo Bleues au sol
+            while (boostPadsGroup.children.length > 0) boostPadsGroup.remove(boostPadsGroup.children[0]);
+            boostPads = [];
+            for (let i = 0; i < 6; i++) {
+                const laneIdx = i % 3;
+                const pad = new THREE.Mesh(
+                    new THREE.PlaneGeometry(3.8, 5.5),
+                    new THREE.MeshBasicMaterial({ color: 0x00f2fe, side: THREE.DoubleSide })
+                );
+                pad.rotation.x = -Math.PI / 2;
+                pad.position.set(LANE_X[laneIdx], 0.04, -25 - (i * 34));
+                boostPadsGroup.add(pad);
+                boostPads.push(pad);
+            }
+
+            // Lancer le décompte visuel 3 - 2 - 1 - PARTEZ !
+            runStartLightsSequence();
+            sendArduinoCommand('RACE\n');
+            speakText('Attention pour le départ de la course contre les pilotes I A !');
+        }
+
+        function runStartLightsSequence() {
+            const overlay = document.getElementById('race-countdown-overlay');
+            const l1 = document.getElementById('light-1');
+            const l2 = document.getElementById('light-2');
+            const l3 = document.getElementById('light-3');
+            const txt = document.getElementById('countdown-big-text');
+
+            overlay.classList.remove('hidden');
+            l1.className = 'start-light red';
+            l2.className = 'start-light';
+            l3.className = 'start-light';
+            txt.textContent = '3';
+            playSoundEffect('beep');
+
+            setTimeout(() => {
+                l2.className = 'start-light amber';
+                txt.textContent = '2';
+                playSoundEffect('beep');
+            }, 650);
+
+            setTimeout(() => {
+                l3.className = 'start-light green';
+                l1.className = 'start-light green';
+                l2.className = 'start-light green';
+                txt.textContent = 'PARTEZ !';
+                playSoundEffect('go');
+            }, 1300);
+
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+            }, 1900);
+
+            if (raceTimerInterval) clearInterval(raceTimerInterval);
+            raceTimerInterval = setInterval(() => {
+                if (gameState.mode !== 'RACE' || gameState.paused) return;
+                gameState.raceTimeLeft--;
+                document.getElementById('race-timer-val').textContent = `${gameState.raceTimeLeft}s`;
+                if (gameState.raceTimeLeft <= 0) {
+                    finishAIRaceWithPodium();
+                }
+            }, 1000);
+        }
+
+        function finishAIRaceWithPodium() {
+            if (raceTimerInterval) clearInterval(raceTimerInterval);
+            gameState.paused = true;
+
+            const rank = gameState.raceRank;
+            const bonus = (gameState.raceOvertakes * 50) + ((7 - rank) * 100);
+            gameState.score += bonus;
+            gameState.questionsUntilRace = 0;
+            saveGarageProgress();
+            updateScoreUI();
+
+            document.getElementById('podium-trophy').textContent = rank === 1 ? '🏆' : (rank <= 3 ? '🥇' : '🏁');
+            document.getElementById('podium-title').textContent =
+                rank === 1 ? 'VICTOIRE ! MAXIME EST 1er !' : `BRAVO MAXIME ! ${rank}e SUR 6 !`;
+            document.getElementById('podium-summary').textContent =
+                `Tu as doublé ${gameState.raceOvertakes} voitures IA et gagné +${bonus} points pour ton Garage !`;
+
+            document.getElementById('modal-podium').classList.remove('hidden');
+            playSoundEffect('win');
+            sendArduinoCommand('WIN\n');
+            speakText(`Course terminée ! Bravo Maxime, tu termines ${rank === 1 ? 'premier' : rank + 'ème'} avec ${gameState.raceOvertakes} dépassements !`);
+        }
+
+        function closePodiumAndResumeQuiz() {
+            document.getElementById('modal-podium').classList.add('hidden');
+            stopRaceAndReturnToQuiz();
+        }
+
+        function stopRaceAndReturnToQuiz() {
+            if (raceTimerInterval) clearInterval(raceTimerInterval);
+            while (aiCarsGroup.children.length > 0) aiCarsGroup.remove(aiCarsGroup.children[0]);
+            while (boostPadsGroup.children.length > 0) boostPadsGroup.remove(boostPadsGroup.children[0]);
+            aiPilots = [];
+            boostPads = [];
+
+            gameState.mode = 'QUIZ';
+            gameState.paused = false;
+
+            document.getElementById('race-hud-banner').classList.add('hidden');
+            document.getElementById('race-countdown-overlay').classList.add('hidden');
+            document.getElementById('quiz-question-banner').classList.remove('hidden');
+            document.getElementById('lanes-answers-overlay').classList.remove('hidden');
+
+            spawnNextQuestionPortal();
+        }
+
+        /***********************************************************************
+         * 8. COLLISIONS QUIZ & RÉCOMPENSES
+         ***********************************************************************/
+        function evaluateQuizCollision() {
+            const chosenLane = gameState.currentLaneIndex;
+            const choice = gameState.laneChoices[chosenLane];
+
+            if (choice && choice.isCorrect) {
+                gameState.streak++;
+                gameState.questionsUntilRace++;
+                const pts = 100 + (gameState.streak * 20);
+                gameState.score += pts;
+                gameState.boostTimer = 1.6;
+
+                saveGarageProgress();
+                updateScoreUI();
+                playSoundEffect('win');
+                sendArduinoCommand('WIN\n');
+                triggerScreenFlash('rgba(16, 185, 129, 0.35)');
+                spawnParticles(carGroup.position.x, 1.8, 0, 0x10b981);
+
+                showCenterToast(`✅ BRAVO ! FILE ${LANE_LETTERS[chosenLane]} : ${choice.text} (+${pts} pts)`, 'c-green', activeQuestion.exp);
+
+                // Si Maxime atteint 10 bonnes réponses -> Lancement automatique de la Course IA !
+                if (gameState.questionsUntilRace >= gameState.targetQuestionsForRace) {
+                    gameState.portalZ = -999;
+                    setTimeout(() => {
+                        launchAIRaceNow();
+                    }, 900);
+                } else {
+                    spawnNextQuestionPortal();
+                }
+            } else {
+                const goodIdx = gameState.laneChoices.findIndex(c => c.isCorrect);
+                gameState.streak = 0;
+                gameState.slowTimer = 1.5;
+
+                updateScoreUI();
+                playSoundEffect('fail');
+                sendArduinoCommand('FAIL\n');
+                triggerScreenFlash('rgba(244, 63, 94, 0.38)');
+                spawnParticles(carGroup.position.x, 1.8, 0, 0xf43f5e);
+
+                showCenterToast(
+                    `❌ Oups ! C'était FILE ${LANE_LETTERS[goodIdx]} : "${activeQuestion.good}"`,
+                    'c-red',
+                    activeQuestion.exp
+                );
+                speakText(`La bonne réponse était ${activeQuestion.good}`);
+                spawnNextQuestionPortal();
+            }
+        }
+
+        function updateScoreUI() {
+            document.getElementById('hud-score').textContent = gameState.score;
+            document.getElementById('hud-streak').textContent = gameState.streak;
+            document.getElementById('race-counter-text').textContent =
+                `${gameState.questionsUntilRace} / ${gameState.targetQuestionsForRace}`;
+
+            const segContainer = document.getElementById('race-segments');
+            if (segContainer) {
+                let html = '';
+                for (let i = 0; i < gameState.targetQuestionsForRace; i++) {
+                    html += `<div class="prog-seg ${i < gameState.questionsUntilRace ? 'filled' : ''}"></div>`;
+                }
+                segContainer.innerHTML = html;
+            }
+        }
+
+        function showCenterToast(title, colorType, subtitle = '') {
+            const toast = document.getElementById('feedback-toast');
+            const box = document.getElementById('feedback-box');
+            const tEl = document.getElementById('feedback-title');
+            const sEl = document.getElementById('feedback-sub');
+
+            if (colorType === 'c-green') {
+                box.className = 'px-6 py-4 rounded-3xl border-4 shadow-2xl text-center max-w-lg bg-emerald-950/95 border-emerald-400';
+            } else if (colorType === 'c-red') {
+                box.className = 'px-6 py-4 rounded-3xl border-4 shadow-2xl text-center max-w-lg bg-rose-950/95 border-rose-400';
+            } else {
+                box.className = 'px-6 py-4 rounded-3xl border-4 shadow-2xl text-center max-w-lg bg-amber-950/95 border-amber-400';
+            }
+
+            tEl.textContent = title;
+            sEl.textContent = subtitle;
+            toast.classList.remove('opacity-0', 'scale-90');
+            toast.classList.add('opacity-100', 'scale-100');
+
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => {
+                toast.classList.remove('opacity-100', 'scale-100');
+                toast.classList.add('opacity-0', 'scale-90');
+            }, 2400);
+        }
+
+        function triggerScreenFlash(rgba) {
+            const f = document.getElementById('screen-flash');
+            f.style.backgroundColor = rgba;
+            f.style.opacity = '1';
+            setTimeout(() => { f.style.opacity = '0'; }, 220);
+        }
+
+        function triggerManualBoost() {
+            ensureAudio();
+            if (gameState.boostTimer <= 0.3) {
+                gameState.boostTimer = 1.6;
+                playSoundEffect('boost');
+                sendArduinoCommand('BOOST\n');
+            }
+        }
+
+        function spawnParticles(x, y, z, hexColor) {
+            const geo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+            const mat = new THREE.MeshBasicMaterial({ color: hexColor });
+            for (let i = 0; i < 18; i++) {
+                const m = new THREE.Mesh(geo, mat);
+                m.position.set(x, y, z);
+                m.userData = {
+                    vx: (Math.random() - 0.5) * 14,
+                    vy: Math.random() * 8 + 2,
+                    vz: (Math.random() - 0.5) * 14,
+                    life: 0.75
+                };
+                scene.add(m);
+                particles.push(m);
+            }
+        }
+
+        /***********************************************************************
+         * 9. BOUCLE D'ANIMATION 60 FPS (QUIZ + COURSE IA + GYROPHARES)
+         ***********************************************************************/
+        let lastTime = performance.now();
+
+        function animate(now) {
+            requestAnimationFrame(animate);
+            const dt = Math.min(0.05, (now - lastTime) / 1000);
+            lastTime = now;
+
+            pollGamepadInputs();
+
+            // Animation des gyrophares (Camion de Pompier & Voiture de Police)
+            if (emergencyLightsMeshes.length >= 2) {
+                const blink = Math.floor(now / 150) % 2 === 0;
+                emergencyLightsMeshes[0].visible = blink;
+                emergencyLightsMeshes[1].visible = !blink;
+            }
+
+            if (gameState.paused) {
+                renderer.render(scene, camera);
+                return;
+            }
+
+            // 1. Calcul de la vitesse (En mode RACE, vitesse de base plus élevée pour doubler les pilotes IA !)
+            if (gameState.boostTimer > 0) gameState.boostTimer -= dt;
+            if (gameState.slowTimer > 0) gameState.slowTimer -= dt;
+
+            const baseSpeed = gameState.mode === 'RACE' ? 148 : 85;
+            let targetSpeed = baseSpeed + (inputState.gas * 65) - (inputState.brake * 85);
+            if (gameState.boostTimer > 0) targetSpeed += 65;
+            if (gameState.slowTimer > 0) targetSpeed = Math.min(targetSpeed, 60);
+            targetSpeed = Math.max(40, Math.min(250, targetSpeed));
+
+            gameState.speedKmh += (targetSpeed - gameState.speedKmh) * Math.min(1, dt * 5);
+            const worldMoveZ = gameState.speedKmh * 0.36 * dt;
+
+            // Flammes Nitro
+            const isBoosting = gameState.boostTimer > 0;
+            if (carGroup && carGroup.userData.flames) {
+                carGroup.userData.flames.forEach(f => {
+                    f.visible = isBoosting;
+                });
+            }
+
+            // 2. Position latérale de la voiture sur les Files A (-5), B (0), C (+5)
+            const desiredX = inputState.usingWheel
+                ? inputState.steer * (LANE_WIDTH * 1.15)
+                : LANE_X[inputState.targetLaneIdx];
+
+            const prevX = gameState.carX;
+            gameState.carX += (desiredX - gameState.carX) * Math.min(1, dt * 9.5);
+            gameState.carX = Math.max(-7.2, Math.min(7.2, gameState.carX));
+
+            if (carGroup) {
+                carGroup.position.x = gameState.carX;
+                carGroup.rotation.z = (prevX - gameState.carX) * 0.38;
+                carGroup.rotation.y = (prevX - gameState.carX) * 0.22;
+            }
+            camera.position.x += (gameState.carX * 0.35 - camera.position.x) * dt * 6;
+
+            // Déterminer la file actuelle (0 = File A, 1 = File B, 2 = File C)
+            let nearestLane = 1;
+            if (gameState.carX < -LANE_WIDTH * 0.45) nearestLane = 0;
+            else if (gameState.carX > LANE_WIDTH * 0.45) nearestLane = 2;
+
+            if (nearestLane !== gameState.currentLaneIndex) {
+                gameState.currentLaneIndex = nearestLane;
+                updateLaneCardsHighlight(nearestLane);
+            }
+
+            // 3. Défilement de la route
+            roadDashes.forEach(d => {
+                d.position.z += worldMoveZ;
+                if (d.position.z > 14) d.position.z -= 230;
+            });
+            roadsidePillars.forEach(p => {
+                p.position.z += worldMoveZ;
+                if (p.position.z > 14) p.position.z -= 220;
+            });
+
+            // 4. Mode QUIZ : Avancée du portail de réponses A / B / C
+            if (gameState.mode === 'QUIZ') {
+                gameState.portalZ += worldMoveZ * 0.72;
+                portalGroup.position.z = gameState.portalZ;
+
+                if (gameState.portalZ >= 1.8) {
+                    evaluateQuizCollision();
+                }
+            }
+
+            // 5. Mode COURSE IA : Dépassement des 5 Pilotes IA & Plaques Turbo
+            if (gameState.mode === 'RACE') {
+                boostPads.forEach(pad => {
+                    pad.position.z += worldMoveZ;
+                    if (pad.position.z > 0.5 && pad.position.z < 4.5 && Math.abs(pad.position.x - gameState.carX) < 2.2) {
+                        triggerManualBoost();
+                        showCenterToast('⚡ TURBO PAD ! +VITESSE !', 'c-green');
+                    }
+                    if (pad.position.z > 14) {
+                        pad.position.z = -195;
+                        pad.position.x = LANE_X[Math.floor(Math.random() * 3)];
+                    }
+                });
+
+                let carsAhead = 0;
+                aiPilots.forEach(ai => {
+                    // Différence de vitesse pour que Maxime rattrape toujours les pilotes IA !
+                    const relSpeed = Math.max(18, gameState.speedKmh - ai.speedKmh) * 0.36;
+                    ai.relZ += relSpeed * dt;
+
+                    // Changement de file intelligent de l'IA
+                    ai.laneTimer -= dt;
+                    if (ai.laneTimer <= 0) {
+                        ai.laneTimer = 1.8 + Math.random() * 2.2;
+                        ai.lane = Math.floor(Math.random() * 3);
+                        ai.targetX = LANE_X[ai.lane];
+                    }
+                    ai.mesh.position.x += (ai.targetX - ai.mesh.position.x) * Math.min(1, dt * 4.5);
+                    ai.mesh.position.z = ai.relZ;
+
+                    // Collision légère si Maxime touche l'arrière d'une voiture IA
+                    if (Math.abs(ai.relZ - 2.2) < 3.1 && Math.abs(ai.mesh.position.x - gameState.carX) < 1.85) {
+                        gameState.speedKmh = Math.max(95, gameState.speedKmh - 35);
+                        ai.relZ -= 7;
+                        playSoundEffect('fail');
+                        showCenterToast(`💥 Attention à ${ai.name} ! Change de file !`, 'c-amber');
+                    }
+
+                    // Dépassement validé quand la voiture IA passe derrière Maxime !
+                    if (ai.relZ > 4.2 && !ai.passed) {
+                        ai.passed = true;
+                        gameState.raceOvertakes++;
+                        gameState.score += 50;
+                        document.getElementById('race-overtakes-val').textContent = gameState.raceOvertakes;
+                        document.getElementById('hud-score').textContent = gameState.score;
+                        playSoundEffect('win');
+                        showCenterToast(`🚀 Tu as doublé ${ai.name} ! +50 pts`, 'c-green');
+                    }
+
+                    // Recycler la voiture au loin devant pour garder l'action continue
+                    if (ai.relZ > 16) {
+                        ai.relZ = -85 - Math.random() * 25;
+                        ai.passed = false;
+                        ai.lane = Math.floor(Math.random() * 3);
+                        ai.targetX = LANE_X[ai.lane];
+                        ai.mesh.position.x = ai.targetX;
+                    }
+
+                    if (ai.relZ < 2.2) carsAhead++;
+                });
+
+                gameState.raceRank = Math.max(1, Math.min(6, 1 + Math.min(5, Math.floor(carsAhead))));
+                document.getElementById('race-rank-val').textContent =
+                    gameState.raceRank === 1 ? '1er / 6' : `${gameState.raceRank}e / 6`;
+            }
+
+            // 6. Particules 3D
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.position.x += p.userData.vx * dt;
+                p.position.y += p.userData.vy * dt;
+                p.position.z += p.userData.vz * dt;
+                p.userData.vy -= 18 * dt;
+                p.userData.life -= dt;
+                if (p.userData.life <= 0) {
+                    scene.remove(p);
+                    particles.splice(i, 1);
+                }
+            }
+
+            // 7. Compteur de vitesse HUD
+            const kmh = Math.round(gameState.speedKmh);
+            document.getElementById('hud-speed').textContent = kmh;
+            document.getElementById('hud-rpm-bar').style.width = `${Math.min(100, Math.round((kmh / 240) * 100))}%`;
+
+            renderer.render(scene, camera);
+        }
+
+        /***********************************************************************
+         * 10. MODALES, ARDUINO & ÉDITEUR DE DEVOIRS
+         ***********************************************************************/
+        function openModal(id) {
+            if (id === 'modal-garage') renderGarageModal();
+            document.getElementById(id).classList.remove('hidden');
+            gameState.paused = true;
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+            gameState.paused = false;
+        }
+
+        function cycleSubject() {
+            subjectIndex = (subjectIndex + 1) % SUBJECT_LIST.length;
+            const name = SUBJECT_LIST[subjectIndex];
+            document.getElementById('lbl-subject').textContent = `Matière : ${name}`;
+            if (gameState.mode === 'QUIZ') spawnNextQuestionPortal();
+        }
+
+        function addCustomQuestion() {
+            const cat = document.getElementById('hw-cat').value;
+            const q = document.getElementById('hw-q').value.trim();
+            const good = document.getElementById('hw-good').value.trim();
+            const bad1 = document.getElementById('hw-bad1').value.trim();
+            const bad2 = document.getElementById('hw-bad2').value.trim();
+            const msg = document.getElementById('hw-status-msg');
+
+            if (!q || !good || !bad1 || !bad2) {
+                msg.textContent = '⚠️ Remplis tous les champs.';
+                msg.className = 'text-xs text-rose-400 font-semibold';
+                return;
+            }
+            questionsBank.unshift({ cat, q, good, bad: [bad1, bad2], exp: `La bonne réponse est ${good}.` });
+            saveQuestionsBank();
+            document.getElementById('hw-q').value = '';
+            document.getElementById('hw-good').value = '';
+            document.getElementById('hw-bad1').value = '';
+            document.getElementById('hw-bad2').value = '';
+            msg.textContent = '✅ Question enregistrée !';
+            msg.className = 'text-xs text-emerald-400 font-semibold';
+            if (gameState.mode === 'QUIZ') spawnNextQuestionPortal();
+        }
+
+        function deleteQuestionAt(idx) {
+            questionsBank.splice(idx, 1);
+            if (questionsBank.length === 0) questionsBank = [...DEFAULT_QUESTIONS];
+            saveQuestionsBank();
+        }
+
+        function renderHomeworkList() {
+            const list = document.getElementById('hw-list');
+            if (!list) return;
+            list.innerHTML = questionsBank.slice(0, 20).map((item, idx) => `
+                <div class="p-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
+                    <div>
+                        <span class="text-amber-300 font-bold">[${item.cat}]</span>
+                        <span class="text-white font-semibold ml-1">${item.q}</span>
+                        <span class="text-emerald-400 ml-2">✔ ${item.good}</span>
+                    </div>
+                    <button onclick="deleteQuestionAt(${idx})" class="text-rose-400 hover:text-rose-300 px-2 cursor-pointer">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Web Serial API Arduino
+        let serialWriter = null;
+        async function connectArduinoSerial() {
+            if (!('serial' in navigator)) {
+                appendSerialLog('❌ Utilise Chrome ou Edge sur PC pour connecter l’Arduino.');
+                return;
+            }
+            try {
+                const port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 9600 });
+                const encoder = new TextEncoderStream();
+                encoder.readable.pipeTo(port.writable);
+                serialWriter = encoder.writable.getWriter();
+                appendSerialLog('✔ Arduino connecté avec succès !');
+            } catch (e) {
+                appendSerialLog('⚠️ Connexion annulée : ' + e.message);
+            }
+        }
+
+        async function sendArduinoCommand(cmd) {
+            if (!serialWriter) return;
+            try { await serialWriter.write(cmd); } catch (e) {}
+        }
+
+        function appendSerialLog(txt) {
+            const log = document.getElementById('serial-log');
+            if (!log) return;
+            const d = document.createElement('div');
+            d.textContent = txt;
+            log.appendChild(d);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Initialisation au chargement
+        window.onload = function () {
+            loadQuestionsBank();
+            loadGarageProgress();
+            initThreeScene();
+            spawnNextQuestionPortal();
+            updateLaneCardsHighlight(1);
+            requestAnimationFrame(animate);
+        };
+    </script>
+</body>
+</html>
