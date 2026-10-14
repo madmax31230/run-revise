@@ -3,17 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>L'Autoroute des Révisions - Édition Grand Prix Maxime</title>
+  <title>L'Autoroute des Révisions — Édition Course IA</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <style>
     :root {
-      --bg-dark: #0b0e17;
+      --bg-dark: #090d16;
       --panel-bg: rgba(15, 23, 42, 0.88);
       --accent-cyan: #00f2fe;
-      --accent-pink: #ff0844;
-      --accent-gold: #fbbf24;
+      --accent-blue: #4facfe;
       --accent-green: #10b981;
-      --text-light: #f8fafc;
+      --accent-amber: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-purple: #a855f7;
     }
 
     * {
@@ -28,30 +29,27 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: var(--bg-dark);
+      background: var(--bg-dark);
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      color: var(--text-light);
+      color: #f8fafc;
     }
 
-    #game-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+    #canvas-container {
+      position: fixed;
+      inset: 0;
       z-index: 1;
     }
 
-    /* HUD OVERLAY */
+    /* HUD Principal */
     #hud {
-      position: absolute;
+      position: fixed;
       inset: 0;
       z-index: 10;
       pointer-events: none;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 14px 20px;
+      padding: 12px 18px;
     }
 
     .hud-top {
@@ -66,301 +64,326 @@
       display: flex;
       gap: 10px;
       align-items: center;
-      pointer-events: auto;
       flex-wrap: wrap;
+      pointer-events: auto;
     }
 
     .stat-pill {
       background: var(--panel-bg);
       border: 1px solid rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
       padding: 8px 14px;
-      border-radius: 12px;
-      font-weight: 700;
-      font-size: 0.95rem;
+      border-radius: 14px;
       display: flex;
       align-items: center;
-      gap: 6px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+      gap: 8px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     }
 
     .stat-pill span.val {
       color: var(--accent-cyan);
-      font-size: 1.1rem;
+      font-size: 1.2rem;
+      font-variant-numeric: tabular-nums;
     }
 
-    /* BARRE DE PROGRESSION GRAND PRIX (10 QUESTIONS) */
-    .gp-progress-pill {
+    /* Jauge de progression vers la Course IA (10 questions) */
+    .race-progress-pill {
       background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
-      border: 2px solid var(--accent-gold);
-      border-radius: 12px;
-      padding: 6px 14px;
+      border: 2px solid var(--accent-amber);
+      padding: 8px 14px;
+      border-radius: 14px;
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 0 18px rgba(245, 158, 11, 0.3);
+    }
+
+    .progress-segments {
+      display: flex;
       gap: 4px;
-      min-width: 210px;
-      box-shadow: 0 0 15px rgba(251, 191, 36, 0.3);
     }
 
-    .gp-progress-header {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.8rem;
-      font-weight: 800;
-      color: var(--accent-gold);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+    .prog-seg {
+      width: 12px;
+      height: 16px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      transition: all 0.25s ease;
     }
 
-    .gp-progress-track {
-      width: 100%;
-      height: 10px;
-      background: rgba(255, 255, 255, 0.12);
-      border-radius: 99px;
-      overflow: hidden;
+    .prog-seg.filled {
+      background: linear-gradient(180deg, #fde047, #f59e0b);
+      box-shadow: 0 0 8px #f59e0b;
+      transform: scaleY(1.1);
     }
 
-    .gp-progress-fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #f59e0b, #fde047);
-      transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 0 10px #fbbf24;
-    }
-
-    .top-actions {
+    .toolbar {
       display: flex;
       gap: 8px;
-      pointer-events: auto;
       flex-wrap: wrap;
+      pointer-events: auto;
     }
 
-    .btn-hud {
+    .btn-tool {
       background: var(--panel-bg);
-      color: var(--text-light);
+      color: #f8fafc;
       border: 1px solid rgba(255, 255, 255, 0.2);
-      padding: 8px 13px;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 0.88rem;
+      padding: 9px 14px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 0.9rem;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 6px;
-      transition: all 0.2s;
+      transition: all 0.18s ease;
+      backdrop-filter: blur(8px);
     }
 
-    .btn-hud:hover {
+    .btn-tool:hover {
       border-color: var(--accent-cyan);
-      transform: translateY(-1px);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 14px rgba(0, 242, 254, 0.25);
     }
 
-    .btn-hud.active-hw {
+    .btn-tool.active-ok {
       border-color: var(--accent-green);
-      box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+      background: rgba(16, 185, 129, 0.2);
     }
 
-    .btn-hud.btn-gp {
-      background: linear-gradient(135deg, #d97706, #b45309);
-      border-color: var(--accent-gold);
+    .btn-tool.race-trigger {
+      background: linear-gradient(135deg, #f59e0b, #ea580c);
+      border-color: #fde047;
       color: #fff;
     }
 
-    /* BANNIÈRE QUESTION (MODE RÉVISIONS) */
-    #question-center {
+    /* PANNEAU QUESTION CENTRAL */
+    #question-zone {
       align-self: center;
-      width: min(760px, 94vw);
-      background: var(--panel-bg);
-      border: 2px solid var(--accent-cyan);
-      border-radius: 18px;
-      padding: 14px 20px;
-      text-align: center;
-      box-shadow: 0 10px 30px rgba(0, 242, 254, 0.2);
-      backdrop-filter: blur(10px);
+      width: min(980px, 96vw);
+      margin-top: 4px;
       pointer-events: auto;
       transition: all 0.3s ease;
     }
 
-    .q-category {
-      font-size: 0.78rem;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      color: var(--accent-gold);
-      font-weight: 800;
-      margin-bottom: 4px;
+    .question-banner {
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(9, 13, 22, 0.92));
+      border: 3px solid var(--accent-cyan);
+      border-radius: 22px;
+      padding: 14px 24px;
+      text-align: center;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.65), 0 0 25px rgba(0, 242, 254, 0.25);
+      position: relative;
     }
 
-    .q-text {
-      font-size: clamp(1.25rem, 2.6vw, 1.85rem);
-      font-weight: 800;
-      margin-bottom: 12px;
-      text-shadow: 0 2px 8px rgba(0,0,0,0.6);
-    }
-
-    .lane-previews {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-    }
-
-    .lane-box {
-      background: rgba(255, 255, 255, 0.07);
-      border: 2px solid rgba(255, 255, 255, 0.15);
-      border-radius: 10px;
-      padding: 8px 6px;
-      font-weight: 700;
-      font-size: clamp(0.9rem, 1.8vw, 1.15rem);
-      transition: all 0.2s;
-    }
-
-    .lane-box.selected {
-      background: rgba(0, 242, 254, 0.22);
-      border-color: var(--accent-cyan);
-      transform: scale(1.04);
-      box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
-    }
-
-    .lane-label {
-      display: block;
-      font-size: 0.68rem;
-      opacity: 0.7;
-      text-transform: uppercase;
-      margin-bottom: 2px;
-    }
-
-    /* BANNIÈRE GRAND PRIX IA (MODE COURSE LIBRE) */
-    #race-hud {
-      display: none;
-      align-self: center;
-      width: min(780px, 95vw);
-      background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.92));
-      border: 2px solid var(--accent-gold);
-      border-radius: 18px;
-      padding: 14px 22px;
-      box-shadow: 0 10px 35px rgba(251, 191, 36, 0.35);
-      backdrop-filter: blur(10px);
-    }
-
-    .race-top-row {
+    .question-meta {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
-      flex-wrap: wrap;
-      gap: 10px;
+      margin-bottom: 6px;
+      font-size: 0.9rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--accent-amber);
     }
 
-    .race-pos-badge {
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      color: #000;
+    #question-text {
+      font-size: clamp(1.6rem, 3.4vw, 2.7rem);
       font-weight: 900;
-      font-size: 1.45rem;
-      padding: 6px 16px;
-      border-radius: 12px;
-      box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+      color: #ffffff;
+      text-shadow: 0 2px 10px rgba(0, 242, 254, 0.35);
+      line-height: 1.2;
     }
 
-    .race-title-center {
+    /* NOUVEAU : LES 3 GRANDES FENÊTRES DE RÉPONSES DIRECTEMENT SUR LES FILES A / B / C */
+    #lanes-answers-overlay {
+      position: fixed;
+      top: 26%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(1180px, 96vw);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: clamp(10px, 2vw, 24px);
+      z-index: 12;
+      pointer-events: auto;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    .lane-answer-card {
+      background: rgba(15, 23, 42, 0.9);
+      border: 4px solid rgba(255, 255, 255, 0.28);
+      border-radius: 22px;
+      padding: 14px 16px 18px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 128px;
+      position: relative;
+    }
+
+    .lane-answer-card.lane-a {
+      border-color: rgba(56, 189, 248, 0.65);
+    }
+    .lane-answer-card.lane-b {
+      border-color: rgba(168, 85, 247, 0.65);
+    }
+    .lane-answer-card.lane-c {
+      border-color: rgba(245, 158, 11, 0.65);
+    }
+
+    .lane-badge {
+      font-size: 0.95rem;
+      font-weight: 900;
+      padding: 4px 14px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .lane-a .lane-badge {
+      background: #0284c7;
+      color: #fff;
+    }
+    .lane-b .lane-badge {
+      background: #7e22ce;
+      color: #fff;
+    }
+    .lane-c .lane-badge {
+      background: #d97706;
+      color: #fff;
+    }
+
+    .lane-answer-value {
+      font-size: clamp(1.65rem, 3.3vw, 2.65rem);
+      font-weight: 900;
+      color: #ffffff;
+      line-height: 1.15;
+      word-break: break-word;
+      text-shadow: 0 3px 8px rgba(0, 0, 0, 0.7);
+    }
+
+    .lane-target-indicator {
+      margin-top: 8px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      opacity: 0.75;
+      transition: all 0.18s ease;
+    }
+
+    /* Mise en évidence quand la voiture est alignée sur cette file */
+    .lane-answer-card.selected {
+      transform: translateY(-6px) scale(1.05);
+      background: rgba(15, 23, 42, 0.98);
+      border-color: #10b981;
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.65), 0 16px 35px rgba(0, 0, 0, 0.75);
+    }
+
+    .lane-answer-card.selected .lane-target-indicator {
+      background: #10b981;
+      color: #052e16;
+      opacity: 1;
+      font-weight: 900;
+    }
+
+    /* HUD DU MODE COURSE IA */
+    #race-hud {
+      display: none;
+      align-self: center;
+      width: min(920px, 95vw);
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.92));
+      border: 3px solid #f59e0b;
+      border-radius: 22px;
+      padding: 14px 24px;
+      box-shadow: 0 0 35px rgba(245, 158, 11, 0.45);
+      pointer-events: auto;
+    }
+
+    .race-hud-grid {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
       text-align: center;
     }
 
-    .race-title-center h2 {
-      font-size: 1.2rem;
-      color: var(--accent-gold);
+    .race-metric-label {
+      font-size: 0.85rem;
       text-transform: uppercase;
+      font-weight: 800;
+      color: #cbd5e1;
       letter-spacing: 1px;
     }
 
-    .race-title-center p {
-      font-size: 0.82rem;
-      opacity: 0.85;
-    }
-
-    .nitro-box {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(0, 242, 254, 0.12);
-      border: 1px solid var(--accent-cyan);
-      padding: 6px 12px;
-      border-radius: 10px;
-      font-weight: 800;
-      color: var(--accent-cyan);
-    }
-
-    .race-track-bar {
-      position: relative;
-      width: 100%;
-      height: 16px;
-      background: rgba(255, 255, 255, 0.12);
-      border-radius: 99px;
-      overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-    }
-
-    .race-track-fill {
-      height: 100%;
-      width: 0%;
-      background: repeating-linear-gradient(
-        45deg,
-        #00f2fe,
-        #00f2fe 10px,
-        #3b82f6 10px,
-        #3b82f6 20px
-      );
-      transition: width 0.15s linear;
-    }
-
-    /* FEEDBACK TOAST */
-    #feedback-banner {
-      position: absolute;
-      top: 46%;
-      left: 50%;
-      transform: translate(-50%, -50%) scale(0.8);
-      font-size: clamp(1.6rem, 4vw, 2.8rem);
+    .race-metric-val {
+      font-size: clamp(1.8rem, 3.5vw, 2.6rem);
       font-weight: 900;
-      padding: 14px 32px;
-      border-radius: 20px;
-      text-transform: uppercase;
-      opacity: 0;
-      pointer-events: none;
-      transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      z-index: 25;
-      text-align: center;
-      box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+      color: #fde047;
     }
 
-    #feedback-banner.show {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+    .btn-nitro-race {
+      background: linear-gradient(135deg, #00f2fe, #4facfe);
+      color: #090d16;
+      border: none;
+      padding: 12px 22px;
+      border-radius: 16px;
+      font-size: 1.15rem;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.6);
+      transition: transform 0.15s ease;
     }
 
-    /* BAS DE L'ÉCRAN : COMPTEUR DE VITESSE & CONTRÔLES */
+    .btn-nitro-race:active {
+      transform: scale(0.95);
+    }
+
+    /* Bas de l'écran : Compteur vitesse + Contrôles */
     .hud-bottom {
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
       gap: 12px;
+      flex-wrap: wrap;
     }
 
-    .cockpit-left {
+    .driving-options {
       background: var(--panel-bg);
-      border: 1px solid rgba(255,255,255,0.15);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       padding: 10px 14px;
-      border-radius: 14px;
+      border-radius: 16px;
       pointer-events: auto;
       display: flex;
       flex-direction: column;
       gap: 6px;
-      font-size: 0.85rem;
+      font-size: 0.88rem;
     }
 
-    .cockpit-left label {
+    .driving-options label {
       display: flex;
       align-items: center;
       gap: 8px;
       cursor: pointer;
-      font-weight: 600;
+      font-weight: 700;
     }
 
     .touch-controls {
@@ -369,74 +392,128 @@
       pointer-events: auto;
     }
 
-    .touch-btn {
-      width: 58px;
-      height: 58px;
-      border-radius: 16px;
-      background: var(--panel-bg);
-      border: 2px solid rgba(255,255,255,0.25);
+    .btn-lane {
+      background: rgba(15, 23, 42, 0.9);
+      border: 2px solid rgba(255, 255, 255, 0.25);
       color: #fff;
-      font-size: 1.5rem;
+      padding: 12px 18px;
+      border-radius: 16px;
       font-weight: 900;
+      font-size: 1.05rem;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      active: scale(0.95);
+      transition: all 0.15s;
+    }
+
+    .btn-lane:active {
+      transform: scale(0.94);
+      border-color: var(--accent-cyan);
     }
 
     .speedometer {
       background: var(--panel-bg);
-      border: 2px solid var(--accent-cyan);
-      border-radius: 18px;
+      border: 2px solid rgba(0, 242, 254, 0.35);
+      border-radius: 20px;
       padding: 10px 20px;
       text-align: right;
-      min-width: 155px;
-      box-shadow: 0 0 25px rgba(0, 242, 254, 0.25);
+      min-width: 165px;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.45);
     }
 
     .speed-val {
       font-size: 2.3rem;
       font-weight: 900;
-      line-height: 1;
       color: var(--accent-cyan);
+      line-height: 1;
       font-variant-numeric: tabular-nums;
     }
 
     .speed-unit {
-      font-size: 0.8rem;
+      font-size: 0.85rem;
+      color: #94a3b8;
+      font-weight: 700;
       text-transform: uppercase;
-      opacity: 0.75;
-      letter-spacing: 1px;
     }
 
-    /* MODALES */
-    .modal-overlay {
+    .pedals-bars {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: #94a3b8;
+      font-weight: 700;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 0%;
+      transition: width 0.06s linear;
+    }
+
+    /* Toast de feedback central */
+    #feedback-toast {
+      position: fixed;
+      top: 52%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      z-index: 25;
+      padding: 18px 32px;
+      border-radius: 22px;
+      font-size: clamp(1.4rem, 3vw, 2.3rem);
+      font-weight: 900;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: all 0.22s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.65);
+    }
+
+    #feedback-toast.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    /* Modales (Volant, Arduino, Devoirs, Podium Course IA) */
+    .modal-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(5, 8, 17, 0.82);
-      backdrop-filter: blur(8px);
       z-index: 50;
+      background: rgba(5, 8, 15, 0.82);
+      backdrop-filter: blur(8px);
       display: none;
       align-items: center;
       justify-content: center;
       padding: 16px;
     }
 
-    .modal-overlay.open {
+    .modal-backdrop.open {
       display: flex;
     }
 
     .modal-card {
-      background: #111827;
+      background: #0f172a;
       border: 2px solid rgba(0, 242, 254, 0.4);
-      border-radius: 20px;
-      width: min(680px, 96vw);
-      max-height: 88vh;
+      border-radius: 22px;
+      width: min(740px, 96vw);
+      max-height: 90vh;
       overflow-y: auto;
       padding: 24px;
-      color: var(--text-light);
-      box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+      color: #f8fafc;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8);
     }
 
     .modal-header {
@@ -445,440 +522,265 @@
       align-items: center;
       margin-bottom: 16px;
       padding-bottom: 10px;
-      border-bottom: 1px solid rgba(255,255,255,0.12);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
     }
 
-    .modal-close {
-      background: rgba(255,255,255,0.1);
-      border: none;
-      color: #fff;
-      width: 34px;
-      height: 34px;
-      border-radius: 8px;
+    .modal-header h2 {
+      font-size: 1.4rem;
+      color: var(--accent-cyan);
+    }
+
+    .btn-close {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid #ef4444;
+      padding: 6px 14px;
+      border-radius: 10px;
+      font-weight: 800;
       cursor: pointer;
-      font-size: 1.1rem;
-      font-weight: 700;
-    }
-
-    .axis-row {
-      margin-bottom: 10px;
-      background: rgba(255,255,255,0.04);
-      padding: 8px 12px;
-      border-radius: 8px;
-    }
-
-    .axis-bar-bg {
-      width: 100%;
-      height: 10px;
-      background: rgba(255,255,255,0.12);
-      border-radius: 99px;
-      overflow: hidden;
-      margin-top: 4px;
-    }
-
-    .axis-bar-fill {
-      height: 100%;
-      width: 50%;
-      background: var(--accent-cyan);
     }
 
     .form-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
       gap: 12px;
-      margin: 14px 0;
+      margin: 12px 0;
     }
 
-    select, input[type="text"] {
+    .form-group {
+      background: rgba(255, 255, 255, 0.04);
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+
+    select, input[type="text"], input[type="number"], textarea {
       width: 100%;
-      padding: 9px 12px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.25);
-      background: #1f2937;
+      background: #1e293b;
       color: #fff;
-      font-size: 0.92rem;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #00f2fe, #0284c7);
-      color: #000;
-      font-weight: 800;
-      border: none;
-      padding: 10px 18px;
-      border-radius: 10px;
-      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 8px 10px;
       font-size: 0.95rem;
     }
 
     pre.code-box {
-      background: #090d16;
-      padding: 12px;
-      border-radius: 10px;
+      background: #020617;
+      color: #38bdf8;
+      padding: 14px;
+      border-radius: 12px;
       overflow-x: auto;
-      font-size: 0.8rem;
-      border: 1px solid rgba(255,255,255,0.15);
-      color: #a5f3fc;
+      font-size: 0.82rem;
+      line-height: 1.4;
+      border: 1px solid rgba(56, 189, 248, 0.3);
       margin-top: 10px;
     }
 
-    .q-list-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 12px;
-      background: rgba(255,255,255,0.05);
-      border-radius: 8px;
-      margin-bottom: 6px;
-      font-size: 0.88rem;
+    @media (max-width: 768px) {
+      #lanes-answers-overlay {
+        top: 23%;
+        gap: 8px;
+      }
+      .lane-answer-card {
+        min-height: 98px;
+        padding: 10px 8px;
+      }
+      .lane-badge {
+        font-size: 0.75rem;
+        padding: 3px 8px;
+      }
     }
   </style>
 </head>
 <body>
+  <div id="canvas-container"></div>
 
-  <canvas id="game-canvas"></canvas>
-
-  <!-- INTERFACE HUD -->
+  <!-- HUD PRINCIPAL -->
   <div id="hud">
     <div class="hud-top">
       <div class="stats-bar">
-        <div class="stat-pill">🏆 Score : <span class="val" id="score-val">0</span></div>
-        <div class="stat-pill">🔥 Série : <span class="val" id="streak-val">0</span></div>
-
-        <!-- PROGRESSION VERS LA COURSE IA -->
-        <div class="gp-progress-pill" title="Réponds à 10 questions pour débloquer la course libre contre les pilotes IA !">
-          <div class="gp-progress-header">
-            <span>🏁 Objectif Grand Prix IA</span>
-            <span id="gp-count-text">0 / 10</span>
-          </div>
-          <div class="gp-progress-track">
-            <div class="gp-progress-fill" id="gp-bar-fill"></div>
-          </div>
+        <div class="stat-pill">⭐ Score <span class="val" id="score-val">0</span></div>
+        <div class="stat-pill">🔥 Série <span class="val" id="streak-val">0</span></div>
+        <div class="race-progress-pill" title="Réponds juste à 10 questions pour débloquer la Course contre les Pilotes IA !">
+          <span>🏆 Course IA : <strong id="race-counter-text">0 / 10</strong></span>
+          <div class="progress-segments" id="race-segments"></div>
         </div>
       </div>
 
-      <div class="top-actions">
-        <select id="category-select" class="btn-hud" onchange="changeCategory(this.value)">
-          <option value="ALL">📚 Toutes matières</option>
-          <option value="MATHS">➗ Maths</option>
-          <option value="FRANCAIS">📖 Français</option>
-          <option value="CULTURE">🌍 Découverte</option>
-        </select>
-        <button class="btn-hud btn-gp" onclick="startGrandPrixMode()">🏁 Test GP IA</button>
-        <button class="btn-hud" id="btn-wheel" onclick="openModal('wheel-modal')">🎮 Volant</button>
-        <button class="btn-hud" id="btn-arduino" onclick="openModal('arduino-modal')">🔌 Arduino</button>
-        <button class="btn-hud" onclick="openModal('homework-modal')">✏️ Devoirs</button>
+      <div class="toolbar">
+        <button class="btn-tool race-trigger" id="btn-start-race-now" title="Lancer la course récompense immédiatement">🏁 Course IA</button>
+        <button class="btn-tool" id="btn-subject">📚 Matière : Toutes</button>
+        <button class="btn-tool" id="btn-voice">🔊 Voix : ON</button>
+        <button class="btn-tool" id="btn-wheel">🛞 Volant</button>
+        <button class="btn-tool" id="btn-arduino">🔌 Arduino</button>
+        <button class="btn-tool" id="btn-homework">✏️ Devoirs</button>
       </div>
     </div>
 
-    <!-- PANNEAU CENTRAL MODE QUIZ -->
-    <div id="question-center">
-      <div class="q-category" id="q-cat-label">MATHÉMATIQUES</div>
-      <div class="q-text" id="q-text-display">Prêt pour l'Autoroute des Révisions ?</div>
-      <div class="lane-previews">
-        <div class="lane-box" id="lane-box-0">
-          <span class="lane-label">⬅️ Voie Gauche</span>
-          <span id="ans-0">...</span>
+    <!-- ZONE QUESTION (Mode Révision) -->
+    <div id="question-zone">
+      <div class="question-banner">
+        <div class="question-meta">
+          <span id="question-category">MATHÉMATIQUES</span>
+          <span>Choisis la File A, B ou C avec le volant !</span>
         </div>
-        <div class="lane-box selected" id="lane-box-1">
-          <span class="lane-label">⬆️ Voie Centrale</span>
-          <span id="ans-1">...</span>
-        </div>
-        <div class="lane-box" id="lane-box-2">
-          <span class="lane-label">➡️ Voie Droite</span>
-          <span id="ans-2">...</span>
-        </div>
+        <div id="question-text">7 × 8 = ?</div>
       </div>
     </div>
 
-    <!-- PANNEAU CENTRAL MODE GRAND PRIX IA -->
+    <!-- HUD DE COURSE CONTRE LES PILOTES IA (Mode Récompense) -->
     <div id="race-hud">
-      <div class="race-top-row">
-        <div class="race-pos-badge" id="race-pos-display">1er / 6</div>
-        <div class="race-title-center">
-          <h2>🏆 GRAND PRIX BONUS DE MAXIME 🏆</h2>
-          <p>Double les 5 pilotes IA, prends les chevrons bleus et évite les cônes !</p>
+      <div class="race-hud-grid">
+        <div>
+          <div class="race-metric-label">🏁 Classement</div>
+          <div class="race-metric-val" id="race-rank-val">6e / 6</div>
         </div>
-        <div class="nitro-box" id="race-dist-display">Reste : 2500 m</div>
-      </div>
-      <div class="race-track-bar">
-        <div class="race-track-fill" id="race-progress-fill"></div>
+        <div>
+          <div class="race-metric-label">⏱️ Temps Restant</div>
+          <div class="race-metric-val" id="race-timer-val">45s</div>
+        </div>
+        <div>
+          <div class="race-metric-label">🚀 Dépassements</div>
+          <div class="race-metric-val" id="race-overtakes-val">0</div>
+        </div>
+        <div>
+          <button class="btn-nitro-race" id="btn-race-nitro">⚡ NITRO (Espace)</button>
+        </div>
       </div>
     </div>
 
-    <div id="feedback-banner">BRAVO !</div>
-
-    <!-- BAS DU COCKPIT -->
+    <!-- BAS DU HUD -->
     <div class="hud-bottom">
-      <div class="cockpit-left">
+      <div class="driving-options">
         <label>
-          <input type="checkbox" id="cruise-toggle" checked />
-          🚗 Régulateur Auto (avance tout seul)
+          <input type="checkbox" id="chk-cruise" checked />
+          Régulateur Auto (avance sans pédale)
         </label>
-        <label>
-          <input type="checkbox" id="voice-toggle" checked />
-          🔊 Lecture vocale des questions
-        </label>
-        <div id="hw-status-line" style="font-size:0.76rem; color:#94a3b8;">
-          Clavier : Flèches / Q-D • Volant USB : prêt
+        <div id="input-status-label" style="color: #94a3b8; font-size: 0.8rem;">
+          🎮 Contrôle : Clavier (Flèches / A-B-C) ou Volant USB
         </div>
       </div>
 
       <div class="touch-controls">
-        <button class="touch-btn" onpointerdown="touchSteer(-1)" onpointerup="touchSteer(0)">⬅️</button>
-        <button class="touch-btn" onpointerdown="triggerManualBoost()" title="Boost Nitro">⚡</button>
-        <button class="touch-btn" onpointerdown="touchSteer(1)" onpointerup="touchSteer(0)">➡️</button>
+        <button class="btn-lane" onclick="setLaneTarget(-1)">⬅️ FILE A</button>
+        <button class="btn-lane" onclick="setLaneTarget(0)">⬆️ FILE B</button>
+        <button class="btn-lane" onclick="setLaneTarget(1)">➡️ FILE C</button>
       </div>
 
       <div class="speedometer">
-        <div class="speed-val" id="speed-display">90</div>
+        <div class="speed-val" id="speed-val">110</div>
         <div class="speed-unit">km/h</div>
+        <div class="pedals-bars">
+          <div class="bar-row">
+            <span>ACC</span>
+            <div class="bar-track"><div class="bar-fill" id="bar-throttle" style="background:#10b981;"></div></div>
+          </div>
+          <div class="bar-row">
+            <span>FREIN</span>
+            <div class="bar-track"><div class="bar-fill" id="bar-brake" style="background:#ef4444;"></div></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
+  <!-- LES 3 GRANDES FENÊTRES DE RÉPONSES ALIGNÉES SUR LES FILES A / B / C -->
+  <div id="lanes-answers-overlay">
+    <div class="lane-answer-card lane-a" id="card-lane-0" onclick="setLaneTarget(-1)">
+      <div class="lane-badge">⬅️ FILE A — Gauche</div>
+      <div class="lane-answer-value" id="ans-val-0">54</div>
+      <div class="lane-target-indicator" id="ind-lane-0">Tourne à gauche</div>
+    </div>
+
+    <div class="lane-answer-card lane-b selected" id="card-lane-1" onclick="setLaneTarget(0)">
+      <div class="lane-badge">⬆️ FILE B — Centre</div>
+      <div class="lane-answer-value" id="ans-val-1">56</div>
+      <div class="lane-target-indicator" id="ind-lane-1">✅ VOITURE SUR FILE B</div>
+    </div>
+
+    <div class="lane-answer-card lane-c" id="card-lane-2" onclick="setLaneTarget(1)">
+      <div class="lane-badge">➡️ FILE C — Droite</div>
+      <div class="lane-answer-value" id="ans-val-2">64</div>
+      <div class="lane-target-indicator" id="ind-lane-2">Tourne à droite</div>
+    </div>
+  </div>
+
+  <!-- TOAST FEEDBACK -->
+  <div id="feedback-toast">BRAVO ! +100</div>
+
   <!-- MODALE PODIUM FIN DE COURSE IA -->
-  <div class="modal-overlay" id="podium-modal">
+  <div class="modal-backdrop" id="modal-podium">
     <div class="modal-card" style="text-align:center;">
-      <h1 id="podium-title" style="font-size:2.2rem; color:var(--accent-gold); margin-bottom:10px;">🏆 DRAPEAU À DAMIER !</h1>
-      <p id="podium-subtitle" style="font-size:1.25rem; margin-bottom:18px;">Maxime termine à la 1ère place !</p>
-      <div id="podium-bonus" style="font-size:1.5rem; font-weight:900; color:var(--accent-cyan); margin-bottom:24px;">
-        +500 POINTS BONUS !
-      </div>
-      <button class="btn-primary" style="font-size:1.1rem; padding:14px 28px;" onclick="endGrandPrixAndResumeQuiz()">
-        🚗 Repartir pour 10 nouvelles questions !
+      <div style="font-size: 4rem; margin-bottom: 8px;" id="podium-trophy">🏆</div>
+      <h2 style="font-size: 2rem; color: #fde047; margin-bottom: 8px;" id="podium-title">COURSE TERMINÉE !</h2>
+      <p style="font-size: 1.25rem; margin-bottom: 18px; color: #e2e8f0;" id="podium-summary">
+        Maxime termine 1er avec 8 dépassements !
+      </p>
+      <button class="btn-nitro-race" style="font-size:1.3rem; padding:14px 32px;" onclick="closePodiumAndResume()">
+        🚗 Reprendre la route des révisions !
       </button>
     </div>
   </div>
 
   <!-- MODALE CALIBRATION VOLANT LOGITECH -->
-  <div class="modal-overlay" id="wheel-modal">
+  <div class="modal-backdrop" id="modal-wheel">
     <div class="modal-card">
       <div class="modal-header">
-        <h2>🎮 Calibration Volant & Pédales USB</h2>
-        <button class="modal-close" onclick="closeModal('wheel-modal')">✕</button>
+        <h2>🛞 Configuration Volant & Pédalier Logitech (Gamepad API)</h2>
+        <button class="btn-close" onclick="closeModals()">Fermer</button>
       </div>
-      <p id="gamepad-name-display" style="color:var(--accent-gold); font-weight:700; margin-bottom:12px;">
-        Appuie sur un bouton ou tourne ton volant Logitech pour le détecter...
+      <p style="color:#cbd5e1; font-size:0.92rem; margin-bottom:12px;">
+        Branche le volant en USB et appuie sur un bouton ou tourne le volant pour l'activer.
       </p>
-      <div id="axes-Visualizer"></div>
+      <div id="gamepad-status-box" style="padding:10px; border-radius:10px; background:rgba(255,255,255,0.06); font-weight:700; margin-bottom:12px;">
+        Aucun volant détecté pour l'instant (tourne le volant ou appuie sur une pédale).
+      </div>
       <div class="form-grid">
-        <div>
-          <label>Axe Direction (Volant)</label>
-          <select id="cfg-steer-axis">
-            <option value="0" selected>Axe 0 (Standard Logitech)</option>
-            <option value="1">Axe 1</option>
-            <option value="2">Axe 2</option>
-          </select>
+        <div class="form-group">
+          <label>Axe de direction (Volant)</label>
+          <select id="sel-axis-steer"><option value="0" selected>Axe 0 (Standard Logitech)</option><option value="1">Axe 1</option><option value="2">Axe 2</option></select>
         </div>
-        <div>
+        <div class="form-group">
           <label>Axe Accélérateur</label>
-          <select id="cfg-gas-axis">
-            <option value="2" selected>Axe 2 (Logitech G29/G27/DFGT)</option>
-            <option value="1">Axe 1 (Pédales combinées)</option>
-            <option value="5">Axe 5</option>
-          </select>
+          <select id="sel-axis-throttle"><option value="1">Axe 1</option><option value="2" selected>Axe 2 (Standard G29/G27)</option><option value="5">Axe 5</option></select>
         </div>
-        <div>
-          <label>Axe Pédale de Frein</label>
-          <select id="cfg-brake-axis">
-            <option value="5" selected>Axe 5</option>
-            <option value="3">Axe 3</option>
-            <option value="1">Axe 1</option>
-          </select>
+        <div class="form-group">
+          <label>Axe Frein</label>
+          <select id="sel-axis-brake"><option value="1">Axe 1</option><option value="2">Axe 2</option><option value="5" selected>Axe 5 (Standard G29/G27)</option><option value="3">Axe 3</option></select>
+        </div>
+        <div class="form-group">
+          <label>Sensibilité du volant</label>
+          <input type="number" id="inp-steer-sens" value="1.8" step="0.2" min="0.6" max="4.0" />
         </div>
       </div>
-      <label style="display:flex; align-items:center; gap:8px; margin-top:10px; cursor:pointer;">
-        <input type="checkbox" id="cfg-invert-pedals" checked />
-        Inverser les pédales Logitech (+1 relâché → -1 enfoncé)
+      <label style="display:flex; align-items:center; gap:8px; margin-top:8px; font-weight:700; cursor:pointer;">
+        <input type="checkbox" id="chk-invert-pedals" checked />
+        Inverser les pédales Logitech (+1 relâché vers -1 appuyé)
       </label>
+      <div id="axes-live-monitor" style="margin-top:14px; font-family:monospace; font-size:0.85rem; color:#38bdf8;"></div>
     </div>
   </div>
 
   <!-- MODALE ARDUINO WEB SERIAL -->
-  <div class="modal-overlay" id="arduino-modal">
+  <div class="modal-backdrop" id="modal-arduino">
     <div class="modal-card">
       <div class="modal-header">
-        <h2>🔌 Connexion Arduino (Web Serial API)</h2>
-        <button class="modal-close" onclick="closeModal('arduino-modal')">✕</button>
+        <h2>🔌 Connexion Arduino (Cockpit LEDs / Buzzer / Pédalier)</h2>
+        <button class="btn-close" onclick="closeModals()">Fermer</button>
       </div>
-      <p style="margin-bottom:12px; font-size:0.9rem; opacity:0.9;">
-        Connecte ton Arduino en USB pour allumer des LEDs sur chaque bonne réponse, déclencher un gyrophare pendant le Grand Prix IA ou lire un pédalier branché sur A0/A1.
+      <p style="color:#cbd5e1; font-size:0.9rem; margin-bottom:12px;">
+        Connecte ton Arduino en USB sur Chrome ou Edge. Le jeu envoie automatiquement <code>WIN</code>, <code>FAIL</code>, <code>BOOST</code>, <code>RACE</code> et la vitesse, et lit les valeurs si tu branches un pédalier sur A0/A1.
       </p>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
-        <button class="btn-primary" onclick="connectArduinoSerial()">🔌 Connecter le port USB Arduino</button>
-        <button class="btn-hud" onclick="sendSerialCommand('WIN')">Tester WIN</button>
-        <button class="btn-hud" onclick="sendSerialCommand('FAIL')">Tester FAIL</button>
-        <button class="btn-hud" onclick="sendSerialCommand('GP_START')">Tester GP_START</button>
-      </div>
-      <pre class="code-box">// Code Arduino C++ prêt à téléverser (115200 bauds)
-void setup() {
-  Serial.begin(115200);
-  pinMode(LED_BUILTIN, OUTPUT);
-}
-void loop() {
-  if (Serial.available()) {
-    String cmd = Serial.readStringUntil('\n');
-    cmd.trim();
-    if (cmd == "WIN" || cmd == "GP_START") digitalWrite(LED_BUILTIN, HIGH);
-    if (cmd == "FAIL") digitalWrite(LED_BUILTIN, LOW);
-  }
-}</pre>
-    </div>
-  </div>
-
-  <!-- MODALE ÉDITEUR DE DEVOIRS -->
-  <div class="modal-overlay" id="homework-modal">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h2>✏️ Éditeur des Devoirs de Maxime</h2>
-        <button class="modal-close" onclick="closeModal('homework-modal')">✕</button>
-      </div>
-      <div class="form-grid">
-        <div>
-          <label>Matière</label>
-          <select id="new-q-cat">
-            <option value="MATHS">Maths</option>
-            <option value="FRANCAIS">Français</option>
-            <option value="CULTURE">Découverte</option>
-          </select>
-        </div>
-        <div>
-          <label>Question</label>
-          <input type="text" id="new-q-text" placeholder="Ex: 8 x 7 = ?" />
-        </div>
-        <div>
-          <label>Bonne réponse</label>
-          <input type="text" id="new-q-good" placeholder="Ex: 56" />
-        </div>
-        <div>
-          <label>Mauvaise réponse 1</label>
-          <input type="text" id="new-q-bad1" placeholder="Ex: 54" />
-        </div>
-        <div>
-          <label>Mauvaise réponse 2</label>
-          <input type="text" id="new-q-bad2" placeholder="Ex: 64" />
-        </div>
-      </div>
-      <button class="btn-primary" onclick="addCustomQuestion()">➕ Ajouter aux révisions</button>
-      <hr style="border-color:rgba(255,255,255,0.1); margin:16px 0;" />
-      <div id="custom-questions-list"></div>
-    </div>
-  </div>
-
-  <script>
-    /**************************************************************
-     * 1. BANQUE DE QUESTIONS & PROGRESSION VERS LE GRAND PRIX IA
-     **************************************************************/
-    const DEFAULT_QUESTIONS = [
-      { cat: 'MATHS', q: '7 × 8 = ?', answers: ['54', '56', '64'], correct: 1 },
-      { cat: 'MATHS', q: '6 × 9 = ?', answers: ['54', '56', '63'], correct: 0 },
-      { cat: 'MATHS', q: '45 + 38 = ?', answers: ['73', '83', '93'], correct: 1 },
-      { cat: 'MATHS', q: 'La moitié de 140 est...', answers: ['60', '70', '80'], correct: 1 },
-      { cat: 'MATHS', q: '9 × 9 = ?', answers: ['81', '72', '99'], correct: 0 },
-      { cat: 'MATHS', q: '100 - 37 = ?', answers: ['73', '63', '67'], correct: 1 },
-      { cat: 'FRANCAIS', q: 'Les enfants ___ dans le jardin.', answers: ['joue', 'jouent', 'joues'], correct: 1 },
-      { cat: 'FRANCAIS', q: 'Il ___ parti très tôt ce matin.', answers: ['est', 'et', 'ai'], correct: 0 },
-      { cat: 'FRANCAIS', q: 'Quel mot est bien orthographié ?', answers: ['Pomtier', 'Sapeur-pompier', 'Pompier-sapeur'], correct: 1 },
-      { cat: 'FRANCAIS', q: 'Nous ___ nos devoirs en conduisant !', answers: ['faisons', 'faisont', 'fezons'], correct: 0 },
-      { cat: 'FRANCAIS', q: 'Le pluriel de "un cheval" est :', answers: ['des chevals', 'des chevaux', 'des chevaus'], correct: 1 },
-      { cat: 'CULTURE', q: 'Quel numéro compose-t-on pour les pompiers ?', answers: ['Le 15', 'Le 18', 'Le 17'], correct: 1 },
-      { cat: 'CULTURE', q: 'Quelle est la capitale de la France ?', answers: ['Toulouse', 'Paris', 'Lyon'], correct: 1 },
-      { cat: 'CULTURE', q: 'How do you say "Voiture" in English?', answers: ['Car', 'House', 'Dog'], correct: 0 }
-    ];
-
-    let questionsBank = [];
-    let selectedCategory = 'ALL';
-    let currentQuestion = null;
-
-    // État du jeu : 'QUIZ', 'GP_RACE', 'GP_PODIUM'
-    let gameMode = 'QUIZ';
-    const QUESTIONS_FOR_GP = 10;
-    let gpCorrectCounter = 0;
-
-    let score = 0;
-    let streak = 0;
-
-    function loadQuestions() {
-      const saved = localStorage.getItem('maxime_custom_questions');
-      if (saved) {
-        try {
-          questionsBank = JSON.parse(saved);
-        } catch (e) {
-          questionsBank = [...DEFAULT_QUESTIONS];
-        }
-      } else {
-        questionsBank = [...DEFAULT_QUESTIONS];
-      }
-      renderCustomQuestionsList();
-    }
-
-    function saveQuestions() {
-      localStorage.setItem('maxime_custom_questions', JSON.stringify(questionsBank));
-      renderCustomQuestionsList();
-    }
-
-    function addCustomQuestion() {
-      const cat = document.getElementById('new-q-cat').value;
-      const q = document.getElementById('new-q-text').value.trim();
-      const good = document.getElementById('new-q-good').value.trim();
-      const bad1 = document.getElementById('new-q-bad1').value.trim();
-      const bad2 = document.getElementById('new-q-bad2').value.trim();
-      if (!q || !good || !bad1 || !bad2) return;
-
-      const answers = [good, bad1, bad2];
-      // Mélanger l'ordre
-      for (let i = answers.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [answers[i], answers[j]] = [answers[j], answers[i]];
-      }
-      const correctIdx = answers.indexOf(good);
-      questionsBank.unshift({ cat, q, answers, correct: correctIdx });
-      saveQuestions();
-
-      document.getElementById('new-q-text').value = '';
-      document.getElementById('new-q-good').value = '';
-      document.getElementById('new-q-bad1').value = '';
-      document.getElementById('new-q-bad2').value = '';
-    }
-
-    function deleteQuestion(idx) {
-      if (questionsBank.length <= 3) return;
-      questionsBank.splice(idx, 1);
-      saveQuestions();
-    }
-
-    function renderCustomQuestionsList() {
-      const container = document.getElementById('custom-questions-list');
-      if (!container) return;
-      container.innerHTML = questionsBank.map((item, idx) => `
-        <div class="q-list-item">
-          <span><strong>[${item.cat}]</strong> ${item.q} → <em style="color:var(--accent-green)">${item.answers[item.correct]}</em></span>
-          <button class="modal-close" style="width:26px;height:26px;font-size:0.8rem;" onclick="deleteQuestion(${idx})">🗑️</button>
-        </div>
-      `).join('');
-    }
-
-    function changeCategory(val) {
-      selectedCategory = val;
-      spawnNextQuizQuestion();
-    }
-
-    /**************************************************************
-     * 2. SYNTHÉTISEUR AUDIO & VOIX FRANÇAISE
-     **************************************************************/
-    let audioCtx = null;
-    function initAudio() {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-    }
-
-    function playTone(freq, type, duration, vol = 0.12) {
-      try {
-        initAudio();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime
+        <button class="btn-tool" style="background:#0284c7;" onclick="connectArduino()">🔌 Connecter le port USB Arduino</button>
+        <button class="btn-tool" onclick="sendSerialCommand('WIN')">Tester WIN</button>
+        <button class="btn-tool" onclick="sendSerialCommand('FAIL')">Tester FAIL</button>
+        <button class
